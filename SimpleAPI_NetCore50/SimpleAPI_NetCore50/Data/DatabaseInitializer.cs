@@ -11,12 +11,18 @@ namespace SimpleAPI_NetCore50.Data
         {
             context.Database.EnsureCreated();
 
-            //if(context.Accounts.Any())
-            //{
-            //    return; // Database has been populated.
-            //}
+            if (context.Accounts.Any())
+            {
+                return; // Database has been populated.
+            }
 
             // populate the database
+            //var accounts = new Authentication.Account[] { };
+            //foreach (Authentication.Account entity in accounts)
+            //{
+                //context.Accounts.Add(entity);
+            //}
+            //context.SaveChanges();
         }
     }
 }
