@@ -9,6 +9,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace SimpleAPI_NetCore50.Controllers
 {
@@ -18,13 +19,13 @@ namespace SimpleAPI_NetCore50.Controllers
     {
         private readonly UserManager<Authentication.Account> accountManager;
         private readonly RoleManager<IdentityRole> roleManager;
-        private readonly IConfiguration Configuration;
+        private readonly IConfiguration AppConfig;
 
-        public AuthenticateController(UserManager<Authentication.Account> userManager, RoleManager<IdentityRole> roleManager, IConfiguration configuration)
+        public AuthenticateController(IConfiguration configuration, UserManager<Authentication.Account> userManager, RoleManager<IdentityRole> roleManager)
         {
             this.accountManager = userManager;
             this.roleManager = roleManager;
-            Configuration = configuration;
+            AppConfig = configuration;
         }
 
         [HttpPost]
@@ -32,26 +33,27 @@ namespace SimpleAPI_NetCore50.Controllers
         public async Task<IActionResult> Login([FromBody] Schemas.LoginModel model)
         {
             Authentication.Account account = await accountManager.FindByNameAsync(model.Email);
+            throw new Exception("Test");
             if (account != null && await accountManager.CheckPasswordAsync(account, model.Password))
             {
                 IList<string> accountRoles = await accountManager.GetRolesAsync(account);
 
                 List<Claim> authClaims = new List<Claim>
-                {
-                    new Claim(ClaimTypes.Email, account.Email),
-                    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                };
+                    {
+                        new Claim(ClaimTypes.Email, account.Email),
+                        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                    };
 
                 foreach (string role in accountRoles)
                 {
                     authClaims.Add(new Claim(ClaimTypes.Role, role));
                 }
 
-                SymmetricSecurityKey authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Configuration["JWT:PrivateKey"]));
+                SymmetricSecurityKey authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(AppConfig["JWT:PrivateKey"]));
 
                 JwtSecurityToken token = new JwtSecurityToken(
-                    issuer: Configuration["JWT:ValidIssuer"],
-                    audience: Configuration["JWT:ValidAudience"],
+                    issuer: AppConfig["JWT:ValidIssuer"],
+                    audience: AppConfig["JWT:ValidAudience"],
                     expires: DateTime.Now.AddHours(3),
                     claims: authClaims,
                     signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)

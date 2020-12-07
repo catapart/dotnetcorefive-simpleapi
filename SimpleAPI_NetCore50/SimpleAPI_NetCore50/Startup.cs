@@ -82,9 +82,14 @@ namespace SimpleAPI_NetCore50
         {
             if (env.IsDevelopment())
             {
-                app.UseDeveloperExceptionPage();
+                app.UseExceptionHandler("/error-development");
+                //app.UseDeveloperExceptionPage(); // this is also helpful for debugging if you don't have a client to display the errors;
                 app.UseSwagger();
                 app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "SimpleAPI_NetCore50 v1"));
+            }
+            else
+            {
+                app.UseExceptionHandler("/error");
             }
             var serviceScopeFactory = app.ApplicationServices.GetRequiredService<IServiceScopeFactory>();
             var serviceProvider = serviceScopeFactory.CreateScope().ServiceProvider;
