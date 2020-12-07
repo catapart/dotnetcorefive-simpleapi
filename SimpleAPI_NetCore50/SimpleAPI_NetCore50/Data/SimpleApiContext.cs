@@ -11,6 +11,8 @@ namespace SimpleAPI_NetCore50.Data
     public class SimpleApiContext : IdentityDbContext<Authentication.Account>
     {
         public DbSet<Authentication.Account> Accounts { get; set; }
+        public DbSet<Models.DataItem> DataItems { get; set; }
+
         public SimpleApiContext(DbContextOptions<SimpleApiContext> options) : base(options)
         {
 
@@ -19,6 +21,9 @@ namespace SimpleAPI_NetCore50.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+
+            modelBuilder.Entity<Models.DataItem>().ToTable("DataItem");
         }
     }
 }

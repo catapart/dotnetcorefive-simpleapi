@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace SimpleAPI_NetCore50.Authentication
 {
-    public class AccountRoles
+    public class AccountRole
     {
         public const string Admin = "Admin";
         public const string Moderater = "Moderater";

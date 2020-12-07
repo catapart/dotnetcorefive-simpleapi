@@ -13,11 +13,10 @@ namespace SimpleAPI_NetCore50.Controllers
     public class ErrorController : Controller
     {
         [Route("/error")]
-        public IActionResult Error() => Problem();
+        public async Task<ActionResult> Error() => await Task.FromResult(Problem());
 
         [Route("/error-development")]
-        public IActionResult ErrorLocalDevelopment(
-        [FromServices] IWebHostEnvironment webHostEnvironment)
+        public async Task<ActionResult> ErrorLocalDevelopment([FromServices] IWebHostEnvironment webHostEnvironment)
         {
             if (webHostEnvironment.EnvironmentName != "Development")
             {
@@ -26,7 +25,7 @@ namespace SimpleAPI_NetCore50.Controllers
 
             var context = HttpContext.Features.Get<IExceptionHandlerFeature>();
 
-            return Problem(detail: context.Error.StackTrace, title: context.Error.Message);
+            return await Task.FromResult(Problem(detail: context.Error.StackTrace, title: context.Error.Message));
         }
     }
 }

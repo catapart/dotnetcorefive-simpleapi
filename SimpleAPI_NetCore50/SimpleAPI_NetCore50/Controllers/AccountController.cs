@@ -15,28 +15,27 @@ namespace SimpleAPI_NetCore50.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class AuthenticateController : ControllerBase
+    public class AccountController : Controller
     {
-        private readonly UserManager<Authentication.Account> accountManager;
-        private readonly RoleManager<IdentityRole> roleManager;
+        private readonly UserManager<Authentication.Account> AccountManager;
+        private readonly RoleManager<IdentityRole> RoleManager;
         private readonly IConfiguration AppConfig;
 
-        public AuthenticateController(IConfiguration configuration, UserManager<Authentication.Account> userManager, RoleManager<IdentityRole> roleManager)
+        public AccountController(IConfiguration configuration, UserManager<Authentication.Account> userManager, RoleManager<IdentityRole> roleManager)
         {
-            this.accountManager = userManager;
-            this.roleManager = roleManager;
+            this.AccountManager = userManager;
+            this.RoleManager = roleManager;
             AppConfig = configuration;
         }
 
         [HttpPost]
         [Route("login")]
-        public async Task<IActionResult> Login([FromBody] Schemas.LoginModel model)
+        public async Task<ActionResult> Login([FromBody] Schemas.AuthRequest model)
         {
-            Authentication.Account account = await accountManager.FindByNameAsync(model.Email);
-            throw new Exception("Test");
-            if (account != null && await accountManager.CheckPasswordAsync(account, model.Password))
+            Authentication.Account account = await AccountManager.FindByNameAsync(model.Email);
+            if (account != null && await AccountManager.CheckPasswordAsync(account, model.Password))
             {
-                IList<string> accountRoles = await accountManager.GetRolesAsync(account);
+                IList<string> accountRoles = await AccountManager.GetRolesAsync(account);
 
                 List<Claim> authClaims = new List<Claim>
                     {
@@ -66,9 +65,9 @@ namespace SimpleAPI_NetCore50.Controllers
 
         [HttpPost]
         [Route("register")]
-        public async Task<IActionResult> Register([FromBody] Schemas.RegisterModel model)
+        public async Task<ActionResult> Register([FromBody] Schemas.AuthRequest model)
         {
-            Authentication.Account accountExists = await accountManager.FindByNameAsync(model.Email);
+            Authentication.Account accountExists = await AccountManager.FindByNameAsync(model.Email);
             if (accountExists != null)
             {
                 return StatusCode(StatusCodes.Status500InternalServerError, new Schemas.AuthResponse { Status = "Error", Message = "Account already exists!" });
@@ -80,64 +79,51 @@ namespace SimpleAPI_NetCore50.Controllers
                 SecurityStamp = Guid.NewGuid().ToString(),
                 UserName = model.Email
             };
-            IdentityResult result = await accountManager.CreateAsync(account, model.Password);
+            IdentityResult result = await AccountManager.CreateAsync(account, model.Password);
             if (!result.Succeeded)
             {
                 return StatusCode(StatusCodes.Status500InternalServerError, new Schemas.AuthResponse { Status = "Error", Message = "Account creation failed! Please check request details and try again." });
+            }
+
+            await this.SanitizeRole(model);
+
+            if (await RoleManager.RoleExistsAsync(model.Role))
+            {
+                await AccountManager.AddToRoleAsync(account, model.Role);
             }
 
             return Ok(new Schemas.AuthResponse { Status = "Success", Message = "Account created successfully!" });
         }
 
-        [HttpPost]
-        [Route("register-admin")]
-        public async Task<IActionResult> RegisterAdmin([FromBody] Schemas.RegisterModel model)
+        private async Task SanitizeRole(Schemas.AuthRequest model)
         {
-            Authentication.Account accountExists = await accountManager.FindByNameAsync(model.Email);
-            if (accountExists != null)
+            // make sure all of your roles actually exist
+            if (!await RoleManager.RoleExistsAsync(Authentication.AccountRole.Admin))
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, new Schemas.AuthResponse { Status = "Error", Message = "Account already exists!" });
+                await RoleManager.CreateAsync(new IdentityRole(Authentication.AccountRole.Admin));
+            }
+            if (!await RoleManager.RoleExistsAsync(Authentication.AccountRole.Moderater))
+            {
+                await RoleManager.CreateAsync(new IdentityRole(Authentication.AccountRole.Moderater));
+            }
+            if (!await RoleManager.RoleExistsAsync(Authentication.AccountRole.ConsumerAdmin))
+            {
+                await RoleManager.CreateAsync(new IdentityRole(Authentication.AccountRole.ConsumerAdmin));
+            }
+            if (!await RoleManager.RoleExistsAsync(Authentication.AccountRole.Consumer))
+            {
+                await RoleManager.CreateAsync(new IdentityRole(Authentication.AccountRole.Consumer));
+            }
+            if (!await RoleManager.RoleExistsAsync(Authentication.AccountRole.Guest))
+            {
+                await RoleManager.CreateAsync(new IdentityRole(Authentication.AccountRole.Guest));
             }
 
-            Authentication.Account account = new Authentication.Account()
+            // get the right one based on the string
+            if(String.Equals(model.Role, ""))
             {
-                Email = model.Email,
-                SecurityStamp = Guid.NewGuid().ToString(),
-                UserName = model.Email
-            };
-            IdentityResult result = await accountManager.CreateAsync(account, model.Password);
-            if (!result.Succeeded)
-            {
-                return StatusCode(StatusCodes.Status500InternalServerError, new Schemas.AuthResponse { Status = "Error", Message = "Account creation failed! Please check request details and try again." });
+                model.Role = Authentication.AccountRole.Consumer;
             }
-
-            if (!await roleManager.RoleExistsAsync(Authentication.AccountRoles.Admin))
-            {
-                await roleManager.CreateAsync(new IdentityRole(Authentication.AccountRoles.Admin));
-            }
-            if (!await roleManager.RoleExistsAsync(Authentication.AccountRoles.Moderater))
-            {
-                await roleManager.CreateAsync(new IdentityRole(Authentication.AccountRoles.Moderater));
-            }
-            if (!await roleManager.RoleExistsAsync(Authentication.AccountRoles.ConsumerAdmin))
-            {
-                await roleManager.CreateAsync(new IdentityRole(Authentication.AccountRoles.ConsumerAdmin));
-            }
-            if (!await roleManager.RoleExistsAsync(Authentication.AccountRoles.Consumer))
-            {
-                await roleManager.CreateAsync(new IdentityRole(Authentication.AccountRoles.Consumer));
-            }
-            if (!await roleManager.RoleExistsAsync(Authentication.AccountRoles.Guest))
-            {
-                await roleManager.CreateAsync(new IdentityRole(Authentication.AccountRoles.Guest));
-            }
-
-            if (await roleManager.RoleExistsAsync(Authentication.AccountRoles.Admin))
-            {
-                await accountManager.AddToRoleAsync(account, Authentication.AccountRoles.Admin);
-            }
-
-            return Ok(new Schemas.AuthResponse { Status = "Success", Message = "Account created successfully!" });
         }
     }
 }

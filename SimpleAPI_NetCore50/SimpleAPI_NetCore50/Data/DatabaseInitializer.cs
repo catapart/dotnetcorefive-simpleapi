@@ -11,18 +11,23 @@ namespace SimpleAPI_NetCore50.Data
         {
             context.Database.EnsureCreated();
 
-            if (context.Accounts.Any())
+            if (context.DataItems.Any())
             {
                 return; // Database has been populated.
             }
 
             // populate the database
-            //var accounts = new Authentication.Account[] { };
-            //foreach (Authentication.Account entity in accounts)
-            //{
-                //context.Accounts.Add(entity);
-            //}
-            //context.SaveChanges();
+            Models.DataItem[] dataItems = new Models.DataItem[]
+            {
+                new Models.DataItem(){Id="FirstItem", Value="This is an item added by the Database initialization."}
+            };
+            foreach(Models.DataItem dataItem in dataItems)
+            {
+                context.DataItems.Add(dataItem);
+            }
+
+
+            context.SaveChanges();
         }
     }
 }
