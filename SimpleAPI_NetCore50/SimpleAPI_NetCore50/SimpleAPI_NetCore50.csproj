@@ -23,7 +23,6 @@
 
   <ItemGroup>
     <Folder Include="Attributes\" />
-    <Folder Include="Websockets\" />
     <Folder Include="Quarantine\" />
     <Folder Include="wwwroot\apps\" />
   </ItemGroup>
