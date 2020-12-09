@@ -13,7 +13,7 @@ namespace SimpleAPI_NetCore50.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class ApplicationController : ControllerBase
+    public class ApplicationController : Controller
     {
         private readonly SimpleApiContext DatabaseContext;
 

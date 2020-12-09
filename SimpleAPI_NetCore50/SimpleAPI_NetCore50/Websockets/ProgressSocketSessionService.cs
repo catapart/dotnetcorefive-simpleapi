@@ -9,6 +9,9 @@ namespace SimpleAPI_NetCore50.Websockets
 {
     public class ProgressSocketSessionService : SocketSessionService
     {
+        private int TotalBytes;
+
+
         public async override Task<SessionSocket> JoinSession(HttpContext context, string sessionType, string sessionKey)
         {
 
@@ -32,19 +35,22 @@ namespace SimpleAPI_NetCore50.Websockets
 
         public async override Task ReceiveMessage(WebSocket socket, WebSocketReceiveResult result, byte[] buffer)
         {
-
+            Schemas.SocketError error = new Schemas.SocketError(){ ErrorCode = "WP_001", Message = "Progress Sessions do not expect messages from the client." };
+            SendMessage(socket, error);
         }
 
         // Custom functionality
-        public async Task UpdateProgress(float value, float total)
+        public async Task UpdateProgress(string sessionKey, int value, int total = -1, string stepId = "")
         {
-            //ProgressResponse progressResponse = new ProgressResponse();
-            //progressResponse.ProgressValue = value;
-            //progressResponse.ProgressTotal = total;
+            Schemas.ProgressResponse response = new Schemas.ProgressResponse()
+            {
+                SessionKey = sessionKey,
+                UnitsCompleted = value,
+                UnitTotal = total,
+                StepID = stepId
+            };
 
-            //string message = JsonSerializer.Serialize(progressResponse);
-
-            //await SendMessageToAllAsync(message);
+            await SendMessageToAll(sessionKey, response);
         }
     }
 }

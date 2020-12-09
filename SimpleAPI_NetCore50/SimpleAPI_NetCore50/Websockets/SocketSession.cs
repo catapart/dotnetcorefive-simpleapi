@@ -21,6 +21,7 @@ namespace SimpleAPI_NetCore50.Websockets
         public WebsocketSessionType SessionType;
         public string SessionKey;
         private ConcurrentDictionary<string, SessionSocket> Sockets = new ConcurrentDictionary<string, SessionSocket>();
+        private ConcurrentBag<ISessionAttribute> Attributes = new ConcurrentBag<ISessionAttribute>();
 
         public static WebsocketSessionType GetSessionType(string typeName)
         {
@@ -77,6 +78,42 @@ namespace SimpleAPI_NetCore50.Websockets
         public async Task CloseAsync(WebSocketCloseStatus closeStatus, string statusDescription, CancellationToken cancellationToken)
         {
             await Task.WhenAll(Sockets.Select(pair => pair.Value.Socket.CloseAsync(closeStatus: closeStatus, statusDescription: statusDescription, cancellationToken: cancellationToken)));
+        }
+
+        
+       
+
+        public T GetAttributeValue<T>(string name)
+        {
+            ISessionAttribute attribute = this.Attributes.FirstOrDefault(attribute => attribute.Name == name);
+            object value = attribute.Data;
+            return (T) value;
+        }
+        public object GetAttributeValue(string name)
+        {
+            ISessionAttribute attribute = this.Attributes.FirstOrDefault(attribute => attribute.Name == name);
+            var value = Convert.ChangeType(attribute.Data, attribute.DataType);
+
+            return value;
+        }
+        public ISessionAttribute GetAttribute(string name)
+        {
+            return this.Attributes.FirstOrDefault(attribute => attribute.Name == name);
+        }
+        public ConcurrentBag<ISessionAttribute> GetAttributes()
+        {
+            return this.Attributes;
+        }
+        public void SetAttribute(string name, object value)
+        {
+            this.Attributes.Add(SessionAttribute.Create(name, value));
+        }
+        public void SetAttributes(IEnumerable<ISessionAttribute> attributes)
+        {
+            foreach (ISessionAttribute attribute in attributes)
+            {
+                this.Attributes.Add(attribute);
+            }
         }
 
         private string CreateSocketId()

@@ -7,13 +7,14 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using System.Net.WebSockets;
 using System.Text;
+using System.Text.Json;
 
 namespace SimpleAPI_NetCore50.Websockets
 {
     public class SocketSessionService
     {
         private ConcurrentDictionary<string, SocketSession> Sessions = new ConcurrentDictionary<string, SocketSession>();
-        private List<string> PreparedKeys = new List<string>();
+        private ConcurrentDictionary<string, ISessionAttribute[]> PreparedSessions = new ConcurrentDictionary<string, ISessionAttribute[]>();
 
         public SocketSession GetSessionByKey(string key)
         {
@@ -28,11 +29,15 @@ namespace SimpleAPI_NetCore50.Websockets
         {
             return Sessions.FirstOrDefault(pair => pair.Value == session).Key;
         }
+        public KeyValuePair<string, ISessionAttribute[]> GetPreparedSession(string key)
+        {
+            return PreparedSessions.FirstOrDefault(pair => pair.Key == key);
+        }
 
-        public virtual string PrepareNewSession()
+        public virtual string PrepareNewSession(params ISessionAttribute[] attributes)
         {
             string sessionKey = CreateSessionKey();
-            PreparedKeys.Add(sessionKey);
+            PreparedSessions.TryAdd(sessionKey, attributes);
             return sessionKey;
         }
 
@@ -54,15 +59,20 @@ namespace SimpleAPI_NetCore50.Websockets
 
         protected virtual SocketSession CreateSession(string sessionType, string sessionKey)
         {
-            if (PreparedKeys.IndexOf(sessionKey) == -1)
+
+            KeyValuePair<string, ISessionAttribute[]> preparedSession = GetPreparedSession(sessionKey);
+            if (preparedSession.Equals(default(KeyValuePair<string, ISessionAttribute[]>)))
             {
                 throw new Exception("Unknown Session: " + sessionKey);
             }
+
             SocketSession targetSession = new SocketSession();
             targetSession.SessionKey = sessionKey;
             targetSession.SessionType = SocketSession.GetSessionType(sessionType);
             Sessions.TryAdd(sessionKey, targetSession);
-            PreparedKeys.Remove(sessionKey);
+            targetSession.SetAttributes(preparedSession.Value);
+
+            PreparedSessions.TryRemove(preparedSession);
 
             return targetSession;
         }
@@ -73,31 +83,54 @@ namespace SimpleAPI_NetCore50.Websockets
             Sessions.TryRemove(sessionKey, out session);
 
             await session.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closed by the Session Service.", CancellationToken.None);
-            if(PreparedKeys.IndexOf(sessionKey) != -1)
+
+            KeyValuePair<string, ISessionAttribute[]> preparedSession = GetPreparedSession(sessionKey);
+            if (!preparedSession.Equals(default(KeyValuePair<string, ISessionAttribute[]>)))
             {
-                PreparedKeys.Remove(sessionKey);
+                PreparedSessions.TryRemove(preparedSession);
             }
         }
 
+        #region SendMessage Overloads
+        public async Task SendMessage(WebSocket socket, object value)
+        {
+            string message = JsonSerializer.Serialize(value);
+            await SendMessage(socket, message);
+        }
+        public async Task SendMessage(SessionSocket sessionSocket, object value)
+        {
+            string message = JsonSerializer.Serialize(value);
+            await SendMessage(sessionSocket.Socket, message);
+        }
         public async Task SendMessage(SessionSocket sessionSocket, string message)
         {
             await SendMessage(sessionSocket.Socket, message);
         }
+        public async Task SendMessage(string sessionKey, string socketId, object value)
+        {
+            string message = JsonSerializer.Serialize(value);
+            await SendMessage(sessionKey, socketId, message);
+        }
         public async Task SendMessage(string sessionKey, string socketId, string message)
         {
             SocketSession socketSession = this.GetSessionByKey(sessionKey);
-            if(socketSession == null)
+            if (socketSession == null)
             {
                 throw new Exception("Unknown Session requested: " + sessionKey);
             }
 
             SessionSocket sessionSocket = socketSession.GetSocketById(socketId);
-            if(sessionSocket == null)
+            if (sessionSocket == null)
             {
                 throw new Exception("Unknown Socket requested: " + socketId);
             }
 
             await SendMessage(sessionSocket.Socket, message);
+        }
+        public async Task SendMessage(string sessionKey, IEnumerable<string> socketIds, object value)
+        {
+            string message = JsonSerializer.Serialize(value);
+            await SendMessage(sessionKey, socketIds, message);
         }
         public async Task SendMessage(string sessionKey, IEnumerable<string> socketIds, string message)
         {
@@ -116,6 +149,11 @@ namespace SimpleAPI_NetCore50.Websockets
                 }
             }
         }
+        public async Task SendMessage(string sessionKey, IEnumerable<WebSocket> sockets, object value)
+        {
+            string message = JsonSerializer.Serialize(value);
+            await SendMessage(sessionKey, sockets, message);
+        }
         public async Task SendMessage(string sessionKey, IEnumerable<WebSocket> sockets, string message)
         {
             List<Task> tasks = new List<Task>();
@@ -133,6 +171,11 @@ namespace SimpleAPI_NetCore50.Websockets
                 }
             }
             await Task.WhenAll(tasks);
+        }
+        public async Task SendMessage(IEnumerable<string> sessionKeys, IEnumerable<string> socketIds, object value)
+        {
+            string message = JsonSerializer.Serialize(value);
+            await SendMessage(sessionKeys, socketIds, message);
         }
         public async Task SendMessage(IEnumerable<string> sessionKeys, IEnumerable<string> socketIds, string message)
         {
@@ -155,6 +198,11 @@ namespace SimpleAPI_NetCore50.Websockets
             }
 
             await Task.WhenAll(tasks);
+        }
+        public async Task SendMessage(IEnumerable<string> sessionKeys, IEnumerable<WebSocket> sockets, object value)
+        {
+            string message = JsonSerializer.Serialize(value);
+            await SendMessage(sessionKeys, sockets, message);
         }
         public async Task SendMessage(IEnumerable<string> sessionKeys, IEnumerable<WebSocket> sockets, string message)
         {
@@ -179,21 +227,16 @@ namespace SimpleAPI_NetCore50.Websockets
             await Task.WhenAll(tasks);
         }
 
-        public virtual async Task SendMessageToAll(string sessionKey, string message)
+        public virtual async Task SendMessageToAll(string sessionKey, object value)
         {
-            SocketSession socketSession = this.GetSessionByKey(sessionKey);
-            if (socketSession == null)
-            {
-                throw new Exception("Unknown Session requested: " + sessionKey);
-            }
+            string message = JsonSerializer.Serialize(value);
+            await SendMessageToAll(sessionKey, message);
+        }
 
-            foreach (var pair in socketSession.GetSockets())
-            {
-                if (pair.Value.Socket.State == WebSocketState.Open)
-                {
-                    await SendMessage(pair.Value.Socket, message);
-                }
-            }
+        public virtual async Task SendMessageToPeers(string sessionKey, string sendingSocketId, object value)
+        {
+            string message = JsonSerializer.Serialize(value);
+            await SendMessageToPeers(sessionKey, sendingSocketId, message);
         }
         public virtual async Task SendMessageToPeers(string sessionKey, string sendingSocketId, string message)
         {
@@ -210,6 +253,41 @@ namespace SimpleAPI_NetCore50.Websockets
                     await SendMessage(pair.Value.Socket, message);
                 }
 
+            }
+        }
+        public virtual async Task SendMessageToPeers(string sessionKey, WebSocket socket, object value)
+        {
+            string message = JsonSerializer.Serialize(value);
+            await SendMessageToPeers(sessionKey, socket, message);
+        }
+        #endregion
+
+        public virtual async Task SendMessage(WebSocket socket, string message)
+        {
+            if (socket.State != WebSocketState.Open)
+            {
+                return;
+            }
+
+            await socket.SendAsync(buffer: new ArraySegment<byte>(array: Encoding.ASCII.GetBytes(message), offset: 0, count: message.Length),
+                                   messageType: WebSocketMessageType.Text,
+                                   endOfMessage: true,
+                                   cancellationToken: CancellationToken.None);
+        }
+        public virtual async Task SendMessageToAll(string sessionKey, string message)
+        {
+            SocketSession socketSession = this.GetSessionByKey(sessionKey);
+            if (socketSession == null)
+            {
+                throw new Exception("Unknown Session requested: " + sessionKey);
+            }
+
+            foreach (var pair in socketSession.GetSockets())
+            {
+                if (pair.Value.Socket.State == WebSocketState.Open)
+                {
+                    await SendMessage(pair.Value.Socket, message);
+                }
             }
         }
         public virtual async Task SendMessageToPeers(string sessionKey, WebSocket socket, string message)
@@ -229,22 +307,12 @@ namespace SimpleAPI_NetCore50.Websockets
             }
         }
 
-        public virtual async Task SendMessage(WebSocket socket, string message)
-        {
-            if (socket.State != WebSocketState.Open)
-            {
-                return;
-            }
-
-            await socket.SendAsync(buffer: new ArraySegment<byte>(array: Encoding.ASCII.GetBytes(message), offset: 0, count: message.Length),
-                                   messageType: WebSocketMessageType.Text,
-                                   endOfMessage: true,
-                                   cancellationToken: CancellationToken.None);
-        }
-
         public virtual async Task ReceiveMessage(WebSocket socket, WebSocketReceiveResult result, byte[] buffer)
         {
-
+            // intentionally blank
+            // you don't have to do anything with messages you get from the client
+            // but if you need to, you can override this function. Otherwise it's
+            // just an empty execution.
         }
 
         private static string CreateSessionKey()

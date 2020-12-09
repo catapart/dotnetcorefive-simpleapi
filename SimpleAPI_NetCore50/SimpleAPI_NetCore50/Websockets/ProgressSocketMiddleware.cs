@@ -13,7 +13,7 @@ namespace SimpleAPI_NetCore50.Websockets
     public class ProgressSocketMiddleware : SocketMiddleware
     {
 
-        public ProgressSocketMiddleware(RequestDelegate next, ILogger<SocketMiddleware> logger, SocketSessionService socketSessionService) : base(next, logger, socketSessionService)
+        public ProgressSocketMiddleware(RequestDelegate next, ILogger<SocketMiddleware> logger, ProgressSocketSessionService socketSessionService) : base(next, logger, socketSessionService)
         {
 
         }
