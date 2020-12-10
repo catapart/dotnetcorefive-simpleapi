@@ -98,14 +98,15 @@
                         };
 
                         const response2 = await fetch(`https://localhost:5001/api/streaming/progress/${sessionKey}`, options);
-                        if (!response2.ok)
-                        {
-                            try
-                            {
+                        if (!response2.ok) {
+                            try {
                                 let result1 = await response2.text();
                                 console.log(result1)
 
-                            }catch(ex){ console.error(ex); }
+                            } catch (ex) { console.error(ex); }
+                        }
+                        else {
+                            console.log(await response2.json());
                         }
 
                     }catch(ex){ console.error(ex); }

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -13,8 +14,16 @@ namespace SimpleAPI_NetCore50.Websockets
 {
     public class SocketSessionService
     {
+        protected readonly IConfiguration AppConfig;
         private ConcurrentDictionary<string, SocketSession> Sessions = new ConcurrentDictionary<string, SocketSession>();
         private ConcurrentDictionary<string, ISessionAttribute[]> PreparedSessions = new ConcurrentDictionary<string, ISessionAttribute[]>();
+        protected readonly Services.FileService FileService;
+
+        public SocketSessionService(IConfiguration configuration, Services.FileService fileService)
+        {
+            AppConfig = configuration;
+            FileService = fileService;
+        }
 
         public SocketSession GetSessionByKey(string key)
         {

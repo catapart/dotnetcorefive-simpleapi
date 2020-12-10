@@ -28,7 +28,7 @@ namespace SimpleAPI_NetCore50.Controllers
             return CreatedAtAction(nameof(OpenSessionGet), sessionKey);
         }
 
-        [HttpPost("{sessionType}/{unitTotal?}")]
+        [HttpPost]
         public async Task<ActionResult> OpenSessionPost(Schemas.SocketSessionRequest socketSessionRequest)
         {
             string sessionKey = this.PrepareSession(socketSessionRequest.SessionType, socketSessionRequest.UnitTotal);

@@ -12,6 +12,7 @@ namespace SimpleAPI_NetCore50.Data
     {
         public DbSet<Authentication.Account> Accounts { get; set; }
         public DbSet<Models.DataItem> DataItems { get; set; }
+        public DbSet<Models.FileMap> FileMaps { get; set; }
 
         public SimpleApiContext(DbContextOptions<SimpleApiContext> options) : base(options)
         {
@@ -22,8 +23,8 @@ namespace SimpleAPI_NetCore50.Data
         {
             base.OnModelCreating(modelBuilder);
 
-
             modelBuilder.Entity<Models.DataItem>().ToTable("DataItem");
+            modelBuilder.Entity<Models.FileMap>().ToTable("FileMap");
         }
     }
 }

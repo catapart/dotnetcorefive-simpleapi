@@ -1,16 +1,31 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using System;
 using System.Net.WebSockets;
-using Microsoft.AspNetCore.Http;
+using System.Threading.Tasks;
 
 namespace SimpleAPI_NetCore50.Websockets
 {
     public class ProgressSocketSessionService : SocketSessionService
     {
-        private int TotalBytes;
+        public readonly long FileSizeLimit;
+        public readonly string[] PermittedExtensions = { ".txt" };
+        public readonly string QuarantinedFilePath;
+        public readonly string FileStoragePath;
 
+        public FormOptions DefaultFormOptions = new FormOptions();
+
+        // Overrides
+        public ProgressSocketSessionService(IConfiguration configuration, Services.FileService fileService) : base(configuration, fileService)
+        {
+
+            FileSizeLimit = this.AppConfig.GetValue<long>("FileUpload:FileSizeLimit");
+            FileStoragePath = AppConfig.GetValue<string>("FileUpload:StoredFilesPath");
+            QuarantinedFilePath = AppConfig.GetValue<string>("FileUpload:QuarantinedFilePath");
+        }
 
         public async override Task<SessionSocket> JoinSession(HttpContext context, string sessionType, string sessionKey)
         {
@@ -40,6 +55,11 @@ namespace SimpleAPI_NetCore50.Websockets
         }
 
         // Custom functionality
+        public async Task<Models.FileMap> StreamFileToServer(HttpRequest request, ModelStateDictionary modelState, ILogger logger,  string sessionKey)
+        {
+            return await this.FileService.StreamFileToDiskWithProgress(request, modelState, logger, this, sessionKey);
+        }
+
         public async Task UpdateProgress(string sessionKey, int value, int total = -1, string stepId = "")
         {
             Schemas.ProgressResponse response = new Schemas.ProgressResponse()

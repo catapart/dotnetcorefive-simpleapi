@@ -44,7 +44,7 @@ namespace SimpleAPI_NetCore50
                 }
             }
 
-            services.AddScoped<Services.FileService>();
+            services.AddSingleton<Services.FileService>();
 
             services.AddCors(options =>
             {

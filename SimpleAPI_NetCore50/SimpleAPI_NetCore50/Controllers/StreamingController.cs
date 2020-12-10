@@ -25,7 +25,7 @@ namespace SimpleAPI_NetCore50.Controllers
     {
         private readonly ILogger<StreamingController> Logger;
         private readonly IConfiguration AppConfig;
-        private readonly Services.FileService FileService;
+        private readonly SimpleApiContext DatabaseContext;
         private readonly ProgressSocketSessionService ProgressSessionService;
 
         private readonly long FileSizeLimit;
@@ -35,11 +35,11 @@ namespace SimpleAPI_NetCore50.Controllers
 
         private FormOptions DefaultFormOptions = new FormOptions();
 
-        public StreamingController(ILogger<StreamingController> logger, IConfiguration configuration, Services.FileService fileService,  ProgressSocketSessionService progressSessionService)
+        public StreamingController(ILogger<StreamingController> logger, IConfiguration configuration, SimpleApiContext context, ProgressSocketSessionService progressSessionService)
         {
             Logger = logger;
             AppConfig = configuration;
-            FileService = fileService;
+            DatabaseContext = context;
             ProgressSessionService = progressSessionService;
 
             FileSizeLimit = AppConfig.GetValue<long>("FileUpload:FileSizeLimit");
@@ -52,78 +52,26 @@ namespace SimpleAPI_NetCore50.Controllers
         [Attributes.DisableFormValueModelBinding]
         public async Task<IActionResult> UploadFile(string sessionType, string sessionKey)
         {
-            if (!IsMultipartContentType(Request.ContentType))
+            FileMap fileMap =  await ProgressSessionService.StreamFileToServer(HttpContext.Request, ModelState, Logger, sessionKey);
+
+            DatabaseContext.FileMaps.Add(fileMap);
+            try
             {
-                return Problem("Form content type must be 'multipart'");
+                await DatabaseContext.SaveChangesAsync();
             }
-
-            var boundary = GetBoundary(MediaTypeHeaderValue.Parse(Request.ContentType), DefaultFormOptions.MultipartBoundaryLengthLimit);
-            var reader = new MultipartReader(boundary, HttpContext.Request.Body);
-            var section = await reader.ReadNextSectionAsync();
-
-            while (section != null)
+            catch (DbUpdateException)
             {
-                var hasContentDispositionHeader = ContentDispositionHeaderValue.TryParse(section.ContentDisposition, out var contentDisposition);
-
-                if (hasContentDispositionHeader)
+                if (DatabaseContext.FileMaps.Any(entry => entry.Id == fileMap.Id))
                 {
-                    // This check assumes that there's a file
-                    // present without form data. If form data
-                    // is present, this method immediately fails
-                    // and returns the model error.
-                    if (!HasFileContentDisposition(contentDisposition))
-                    {
-                        ModelState.AddModelError("File", $"The request couldn't be processed (Error 2).");
-                        return BadRequest(ModelState);
-                    }
-                    else
-                    {
-                        // Don't trust the file name sent by the client. To display
-                        // the file name, HTML-encode the value.
-                        var trustedFileNameForDisplay = WebUtility.HtmlEncode(contentDisposition.FileName.Value);
-                        var trustedFileNameForFileStorage = Path.GetRandomFileName();
-
-                        if (!Directory.Exists(QuarantinedFilePath))
-                        {
-                            Directory.CreateDirectory(QuarantinedFilePath);
-                        }
-                        string quarantinedPath = Path.Combine(QuarantinedFilePath, trustedFileNameForFileStorage);
-
-                        int totalBytes = -1;
-                        SocketSession targetSession = ProgressSessionService.GetSessionByKey(sessionKey);
-                        if(targetSession != null)
-                        {
-                            totalBytes = targetSession.GetAttributeValue<int>("unitTotal");
-                        }
-
-                        FileService.Init(ProgressSessionService, sessionKey, totalBytes);
-                        await FileService.SaveFileToDisk(section, contentDisposition, ModelState, quarantinedPath, PermittedExtensions, FileSizeLimit);
-
-                        if (!ModelState.IsValid)
-                        {
-                            return BadRequest(ModelState);
-                        }
-
-                        if (!Directory.Exists(TargetFilePath))
-                        {
-                            Directory.CreateDirectory(TargetFilePath);
-                        }
-
-                        System.IO.File.Move(quarantinedPath, Path.Combine(TargetFilePath, trustedFileNameForFileStorage));
-                        Logger.LogInformation(
-                                "Uploaded file '{TrustedFileNameForDisplay}' saved to " +
-                                "'{TargetFilePath}' as {TrustedFileNameForFileStorage}",
-                                trustedFileNameForDisplay, TargetFilePath,
-                                trustedFileNameForFileStorage);
-                    }
+                    return Conflict();
                 }
-
-                // Drain any remaining section body that hasn't been consumed and
-                // read the headers for the next section.
-                section = await reader.ReadNextSectionAsync();
+                else
+                {
+                    throw;
+                }
             }
 
-            return Created(nameof(StreamingController), null);
+            return CreatedAtAction(nameof(UploadFile), new { filePath = fileMap.FilenameForDisplay });
         }
 
         private static bool IsMultipartContentType(string contentType)

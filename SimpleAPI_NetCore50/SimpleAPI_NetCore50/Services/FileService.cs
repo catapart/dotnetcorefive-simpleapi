@@ -1,16 +1,17 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Http;
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Net.Http.Headers;
+using SimpleAPI_NetCore50.Websockets;
 
 namespace SimpleAPI_NetCore50.Services
 {
@@ -18,8 +19,9 @@ namespace SimpleAPI_NetCore50.Services
     // WARNING: This service saves files directly to your disk. This is necessary for streaming large files.
     // Any files that are uploaded should, ideally, be cached into a memory stream before ever saving to disk.
     // Some files are too large for memory, so a compromise is to save them to a Quarantined directory that is
-    // monitored by your anitivirus solution, before being distributed elsewhere in the filesystem. If you do not
-    // have a quarantined directory for the files to be uploaded to, you SHOULD NOT use the file upload functionality here.
+    // monitored by your anitivirus solution (usually on an isolated drive), before being distributed elsewhere
+    // in the filesystem. If you do not have a quarantined directory for the files to be uploaded to, you SHOULD
+    // NOT use the file upload functionality here.
     public class FileService
     {
         // If you require a check on specific characters in the IsValidFileExtensionAndSignature
@@ -58,18 +60,92 @@ namespace SimpleAPI_NetCore50.Services
             },
         };
 
-        private Websockets.ProgressSocketSessionService ProgressSessionService;
-        private string SessionKey;
-        private int TotalBytes;
-
-        public void Init(Websockets.ProgressSocketSessionService progressSessionService, string sessionKey, int totalBytes = 0)
+        public async Task<Models.FileMap> StreamFileToDiskWithProgress(HttpRequest request, ModelStateDictionary modelState, ILogger logger, ProgressSocketSessionService sessionService, string sessionKey)
         {
-            this.ProgressSessionService = progressSessionService;
-            this.SessionKey = sessionKey;
-            this.TotalBytes = totalBytes;
+            if(!modelState.IsValid)
+            {
+                return null;
+            }
+
+            if (!IsMultipartContentType(request.ContentType))
+            {
+                modelState.AddModelError("File", "Form content type must be 'multipart'");
+                return null;
+            }
+
+            var boundary = GetBoundary(MediaTypeHeaderValue.Parse(request.ContentType), sessionService.DefaultFormOptions.MultipartBoundaryLengthLimit);
+            var reader = new MultipartReader(boundary, request.Body);
+            var section = await reader.ReadNextSectionAsync();
+
+            string filenameForDisplay = "";
+            string filenameOnDisk = "";
+
+            while (section != null)
+            {
+                var hasContentDispositionHeader = ContentDispositionHeaderValue.TryParse(section.ContentDisposition, out var contentDisposition);
+
+                if (hasContentDispositionHeader)
+                {
+                    // This check assumes that there's a file
+                    // present without form data. If form data
+                    // is present, this method immediately fails
+                    // and returns the model error.
+                    if (!HasFileContentDisposition(contentDisposition))
+                    {
+                        modelState.AddModelError("File", $"The request couldn't be processed (Error 2).");
+                        return null;
+                    }
+                    else
+                    {
+                        // Don't trust the file name sent by the client. To display
+                        // the file name, HTML-encode the value.
+                        filenameForDisplay = WebUtility.HtmlEncode(contentDisposition.FileName.Value);
+                        filenameOnDisk = Path.GetRandomFileName();
+
+                        if (!Directory.Exists(sessionService.QuarantinedFilePath))
+                        {
+                            Directory.CreateDirectory(sessionService.QuarantinedFilePath);
+                        }
+                        string quarantinedPath = Path.Combine(sessionService.QuarantinedFilePath, filenameOnDisk);
+
+                        SocketSession targetSession = sessionService.GetSessionByKey(sessionKey);
+                        if(targetSession == null)
+                        {
+                            modelState.AddModelError("File", "The requested session could not be found.");
+                            return null;
+                        }
+
+                        int totalBytes = targetSession.GetAttributeValue<int>("unitTotal");
+
+                        await SaveFileToDiskWithProgress(section, contentDisposition, modelState, quarantinedPath, sessionService.PermittedExtensions, sessionService.FileSizeLimit, sessionService, targetSession, totalBytes);
+
+                        if (!modelState.IsValid)
+                        {
+                            return null;
+                        }
+
+                        if (!Directory.Exists(sessionService.FileStoragePath))
+                        {
+                            Directory.CreateDirectory(sessionService.FileStoragePath);
+                        }
+
+                        System.IO.File.Move(quarantinedPath, Path.Combine(sessionService.FileStoragePath, filenameOnDisk));
+                        logger.LogInformation("Uploaded file '{TrustedFileNameForDisplay}' saved to '{TargetFilePath}' as {TrustedFileNameForFileStorage}",
+                                filenameForDisplay,
+                                sessionService.FileStoragePath,
+                                filenameOnDisk);
+                    }
+                }
+
+                // Drain any remaining section body that hasn't been consumed and
+                // read the headers for the next section.
+                section = await reader.ReadNextSectionAsync();
+            }
+
+            return new Models.FileMap() { FilenameForDisplay = filenameForDisplay, FilenameOnDisk = filenameOnDisk };
         }
 
-        public async Task SaveFileToDisk(MultipartSection section, ContentDispositionHeaderValue contentDisposition, ModelStateDictionary modelState, string filepath, string[] permittedExtensions, long sizeLimit)
+        public async Task SaveFileToDiskWithProgress(MultipartSection section, ContentDispositionHeaderValue contentDisposition, ModelStateDictionary modelState, string filepath, string[] permittedExtensions, long sizeLimit, ProgressSocketSessionService sessionService, SocketSession targetSession, int totalBytes)
         {
             using (FileStream stream = new FileStream(filepath, FileMode.Create, System.IO.FileAccess.Write))
             {
@@ -79,7 +155,7 @@ namespace SimpleAPI_NetCore50.Services
                 //    modelState.AddModelError("File", "The file type isn't permitted or the file's signature doesn't match the file's extension.");
                 //}
 
-                await CopyToStreamAsync(section.Body, stream);
+                await CopyToStreamWithProgress(section.Body, stream, sessionService, targetSession, totalBytes);
 
                 if (stream.Length == 0)
                 {
@@ -93,7 +169,7 @@ namespace SimpleAPI_NetCore50.Services
             }
         }
 
-        private async Task CopyToStreamAsync(Stream source, Stream destination, string stepId = "", CancellationToken cancellationToken = default(CancellationToken), int bufferSize = 0x1000)
+        private async Task CopyToStreamWithProgress(Stream source, Stream destination, ProgressSocketSessionService sessionService, SocketSession targetSession, int totalBytes = -1, string stepId = "", CancellationToken cancellationToken = default(CancellationToken), int bufferSize = 0x1000)
         {
             byte[] buffer = new byte[bufferSize];
             int currentBytesRead;
@@ -102,11 +178,11 @@ namespace SimpleAPI_NetCore50.Services
             {
                 await destination.WriteAsync(buffer, 0, currentBytesRead, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
-                if(this.ProgressSessionService != null)
-                {
-                    totalBytesRead += currentBytesRead;
-                    this.ProgressSessionService.UpdateProgress(this.SessionKey, totalBytesRead, this.TotalBytes, stepId);
-                }
+
+                totalBytesRead += currentBytesRead;
+                sessionService.UpdateProgress(targetSession.SessionKey, totalBytesRead, totalBytes, stepId);
+
+                await Task.Delay(1); // Stops worker threads from going crazy with CPU
             }
         }
 
@@ -183,6 +259,52 @@ namespace SimpleAPI_NetCore50.Services
                 return signatures.Any(signature =>
                     headerBytes.Take(signature.Length).SequenceEqual(signature));
             }
+        }
+
+        private static bool IsMultipartContentType(string contentType)
+        {
+            return !string.IsNullOrEmpty(contentType) && contentType.IndexOf("multipart/", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        // Content-Type: multipart/form-data; boundary="----WebKitFormBoundarymx2fSWqWSd0OxQqq"
+        // The spec at https://tools.ietf.org/html/rfc2046#section-5.1 states that 70 characters is a reasonable limit.
+        private static string GetBoundary(MediaTypeHeaderValue contentType, int lengthLimit)
+        {
+            var boundary = HeaderUtilities.RemoveQuotes(contentType.Boundary).Value;
+
+            if (string.IsNullOrWhiteSpace(boundary))
+            {
+                throw new InvalidDataException("Missing content-type boundary.");
+            }
+
+            if (boundary.Length > lengthLimit)
+            {
+                throw new InvalidDataException($"Multipart boundary length limit {lengthLimit} exceeded.");
+            }
+
+            return boundary;
+        }
+        private static bool HasFileContentDisposition(ContentDispositionHeaderValue contentDisposition)
+        {
+            // Content-Disposition: form-data; name="myfile1"; filename="Misc 002.jpg"
+            return contentDisposition != null
+                && contentDisposition.DispositionType.Equals("form-data")
+                && (!string.IsNullOrEmpty(contentDisposition.FileName.Value)
+                    || !string.IsNullOrEmpty(contentDisposition.FileNameStar.Value));
+        }
+
+        private static Encoding GetEncoding(MultipartSection section)
+        {
+            var hasMediaTypeHeader = MediaTypeHeaderValue.TryParse(section.ContentType, out var mediaType);
+
+            // UTF-7 is insecure and shouldn't be honored. UTF-8 succeeds in 
+            // most cases.
+            if (!hasMediaTypeHeader || Encoding.UTF7.Equals(mediaType.Encoding))
+            {
+                return Encoding.UTF8;
+            }
+
+            return mediaType.Encoding;
         }
     }
 }
