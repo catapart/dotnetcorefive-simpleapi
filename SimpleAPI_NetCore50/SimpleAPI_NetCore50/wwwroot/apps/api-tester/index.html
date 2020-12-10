@@ -68,7 +68,7 @@
                             console.log(`[message] Data received from server: ${event.data}`);
                             let data = JSON.parse(event.data);
                             console.log(data);
-                            $progressValue.textContent = data.ProgressValue;
+                            $progressValue.textContent = data.UnitsCompleted;
                         };
 
                         socket.onclose = function(event) {
