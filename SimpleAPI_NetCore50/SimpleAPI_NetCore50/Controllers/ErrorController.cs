@@ -23,9 +23,23 @@ namespace SimpleAPI_NetCore50.Controllers
                 throw new InvalidOperationException("This shouldn't be invoked in non-development environments.");
             }
 
-            var context = HttpContext.Features.Get<IExceptionHandlerFeature>();
+            ExceptionHandlerFeature context = (ExceptionHandlerFeature)HttpContext.Features.Get<IExceptionHandlerFeature>();
+            if(context?.Path != null)
+            {
+                if(context.Path.StartsWith("/assets/"))
+                {
+                    int substringIndex = context.Path.LastIndexOf('/');
+                    substringIndex = (substringIndex == -1) ? 0 : substringIndex;
+                    return NotFound(context.Path.Substring(substringIndex));
+                }
+            }
+            var exception = context?.Error;
+            var code = 500;
 
-            return await Task.FromResult(Problem(detail: context.Error.StackTrace, title: context.Error.Message));
+            Response.StatusCode = code; // You can use HttpStatusCode enum instead
+
+
+            return Problem(detail: context.Error.StackTrace, title: context.Error.Message);
         }
     }
 }

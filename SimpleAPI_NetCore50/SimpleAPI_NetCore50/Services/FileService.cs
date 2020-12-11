@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Net.Http.Headers;
 using SimpleAPI_NetCore50.Websockets;
+using Microsoft.AspNetCore.StaticFiles;
 
 namespace SimpleAPI_NetCore50.Services
 {
@@ -79,6 +80,7 @@ namespace SimpleAPI_NetCore50.Services
 
             string filenameForDisplay = "";
             string filenameOnDisk = "";
+            string fileContentType = "";
 
             while (section != null)
             {
@@ -101,6 +103,7 @@ namespace SimpleAPI_NetCore50.Services
                         // the file name, HTML-encode the value.
                         filenameForDisplay = WebUtility.HtmlEncode(contentDisposition.FileName.Value);
                         filenameOnDisk = Path.GetRandomFileName();
+                        fileContentType = GetStaticFileContentType(contentDisposition.FileName.Value);
 
                         if (!Directory.Exists(sessionService.QuarantinedFilePath))
                         {
@@ -142,7 +145,7 @@ namespace SimpleAPI_NetCore50.Services
                 section = await reader.ReadNextSectionAsync();
             }
 
-            return new Models.FileMap() { FilenameForDisplay = filenameForDisplay, FilenameOnDisk = filenameOnDisk };
+            return new Models.FileMap() { FilenameForDisplay = filenameForDisplay, FilenameOnDisk = filenameOnDisk, ContentType = fileContentType };
         }
 
         public async Task SaveFileToDiskWithProgress(MultipartSection section, ContentDispositionHeaderValue contentDisposition, ModelStateDictionary modelState, string filepath, string[] permittedExtensions, long sizeLimit, ProgressSocketSessionService sessionService, SocketSession targetSession, int totalBytes)
@@ -305,6 +308,18 @@ namespace SimpleAPI_NetCore50.Services
             }
 
             return mediaType.Encoding;
+        }
+
+        private string GetStaticFileContentType(string filePath)
+        {
+            FileExtensionContentTypeProvider provider = new FileExtensionContentTypeProvider();
+            string contentType;
+            if (!provider.TryGetContentType(filePath, out contentType))
+            {
+                contentType = "application/octet-stream";
+            }
+
+            return contentType;
         }
     }
 }
