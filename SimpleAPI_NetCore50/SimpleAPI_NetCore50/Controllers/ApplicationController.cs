@@ -1,25 +1,22 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using SimpleAPI_NetCore50.Data;
-using SimpleAPI_NetCore50.Models;
 using System.Reflection;
+using Microsoft.Extensions.Logging;
 
 namespace SimpleAPI_NetCore50.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class ApplicationController : ControllerBase
+    public class ApplicationController : Controller
     {
         private readonly SimpleApiContext DatabaseContext;
+        private readonly ILogger<ApplicationController> Logger;
 
-        public ApplicationController(SimpleApiContext context)
+        public ApplicationController(ILogger<ApplicationController> logger, SimpleApiContext context)
         {
             DatabaseContext = context;
+            Logger = logger;
         }
 
         // GET: api/Application
@@ -28,13 +25,6 @@ namespace SimpleAPI_NetCore50.Controllers
         {
             string appVersion = Assembly.GetEntryAssembly().GetName().Version.ToString();
             return await Task.FromResult(Ok(appVersion));
-        }
-
-        // GET: api/Application
-        [HttpGet("bootstrap")]
-        public async Task<ActionResult> Bootstrap()
-        {
-            return Ok();
         }
     }
 }

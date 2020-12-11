@@ -34,6 +34,18 @@ namespace SimpleAPI_NetCore50
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+
+            services.AddTransient<Websockets.SocketSession>(); // ephemeral sessions
+            foreach (var type in Assembly.GetEntryAssembly().ExportedTypes)
+            {
+                if (type.GetTypeInfo().BaseType == typeof(Websockets.SocketSessionService))
+                {
+                    services.AddSingleton(type); // long-lived management services
+                }
+            }
+
+            services.AddSingleton<Services.FileService>();
+
             services.AddCors(options =>
             {
                 options.AddDefaultPolicy(builder =>
@@ -75,6 +87,9 @@ namespace SimpleAPI_NetCore50
             {
                 c.SwaggerDoc("v1", new OpenApiInfo { Title = "SimpleAPI_NetCore50", Version = "v1" });
             });
+
+
+            //services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(x => x.MultipartBodyLengthLimit = 1_074_790_400);
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -93,6 +108,9 @@ namespace SimpleAPI_NetCore50
             }
             var serviceScopeFactory = app.ApplicationServices.GetRequiredService<IServiceScopeFactory>();
             var serviceProvider = serviceScopeFactory.CreateScope().ServiceProvider;
+
+            app.UseWebSockets();
+            app.Map("/progress", (_app) => _app.UseMiddleware<Websockets.ProgressSocketMiddleware>(serviceProvider.GetService<Websockets.ProgressSocketSessionService>()));
 
             app.UseHttpsRedirection();
 

@@ -1,0 +1,101 @@
+<html>
+    <body>
+        <form enctype="multipart/form-data" method="post">
+            <dl>
+                <dt>
+                    <label>File</label>
+                </dt>
+                <dd>
+                    <input name="uploadfile" type="file">
+                </dd>
+            </dl>
+        </form>
+        <button class="websocket-test" type="button">Test Websocket</button>
+        <div>
+            <span>Progress:</span><span class="progress-value"></span><span>/</span><span class="progress-total"></span>
+        </div>
+        <div>
+            <progress id="progress-percent" min="0" max="100" step="1" value="0"></progress>
+        </div>
+        <script>
+            document.addEventListener('DOMContentLoaded', async () => {
+
+                async function websocketTest_onClick(event) {
+                    let totalBytes = $form['uploadfile'].files[0].size;
+                    $progressTotal.textContent = totalBytes;
+
+                    const response = await fetch(`https://localhost:5001/api/websocket/progress/${totalBytes}`);
+                    try {
+                        let sessionKey = await response.text();
+                        console.log(sessionKey);
+
+                        let socket = new WebSocket(`wss://localhost:5001/progress/${sessionKey}`);
+
+                        socket.onopen = function (e) {
+                            console.log("[open] Connection established");
+                            console.log("Sending to server");
+                            socket.send("Handshake");
+                        };
+
+                        socket.onmessage = function (event) {
+                            console.log(`[message] Data received from server: ${event.data}`);
+                            let data = JSON.parse(event.data);
+                            console.log(data);
+                            $progressValue.textContent = data.UnitsCompleted;
+                            $progressPercentage.value = (data.UnitsCompleted / data.UnitTotal) * 100;
+                        };
+
+                        socket.onclose = function (event) {
+                            if (event.wasClean) {
+                                console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
+                            } else {
+                                // e.g. server process killed or network down
+                                // event.code is usually 1006 in this case
+                                console.log('[close] Connection died');
+                            }
+                        };
+
+                        socket.onerror = function (error) {
+                            console.log(`[error] ${error.message}`);
+                        };
+
+                        window.addEventListener('beforeunload', () => {
+                            socket.onclose = function () { }; // disable onclose handler first
+                            socket.close();
+                        }, { once: true });
+
+                        let options =
+                        {
+                            method: "POST",
+                            body: new FormData($form)
+                        };
+
+                        const response2 = await fetch(`https://localhost:5001/api/streaming/progress/${sessionKey}`, options);
+                        if (!response2.ok) {
+                            try {
+                                let result1 = await response2.text();
+                                console.log(result1)
+
+                            } catch (ex) { console.error(ex); }
+                        }
+                        else {
+                            console.log(await response2.json());
+                        }
+
+                    } catch (ex) { console.error(ex); }
+                }
+
+                var $form = document.querySelector('form');
+                var $file = document.querySelector('input[type="file"]');
+
+
+                var $websocketTest = document.querySelector('.websocket-test');
+                var $progressValue = document.querySelector('span.progress-value');
+                var $progressTotal = document.querySelector('span.progress-total');
+                var $progressPercentage = document.querySelector('progress');
+
+                $websocketTest.addEventListener('click', websocketTest_onClick);
+            });
+        </script>
+    </body>
+</html>
