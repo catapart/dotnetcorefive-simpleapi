@@ -111,6 +111,7 @@ namespace SimpleAPI_NetCore50
 
             app.UseWebSockets();
             app.Map("/progress", (_app) => _app.UseMiddleware<Websockets.ProgressSocketMiddleware>(serviceProvider.GetService<Websockets.ProgressSocketSessionService>()));
+            app.Map("/video", (_app) => _app.UseMiddleware<Websockets.VideoSocketMiddleware>(serviceProvider.GetService<Websockets.VideoSocketSessionService>()));
 
             app.UseHttpsRedirection();
 

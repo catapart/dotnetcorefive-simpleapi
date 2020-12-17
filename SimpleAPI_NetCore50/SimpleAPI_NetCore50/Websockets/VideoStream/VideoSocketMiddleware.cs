@@ -10,10 +10,10 @@ using System.Net.WebSockets;
 
 namespace SimpleAPI_NetCore50.Websockets
 {
-    public class ProgressSocketMiddleware : SocketMiddleware
+    public class VideoSocketMiddleware : SocketMiddleware
     {
 
-        public ProgressSocketMiddleware(RequestDelegate next, ILogger<SocketMiddleware> logger, ProgressSocketSessionService socketSessionService) : base(next, logger, socketSessionService)
+        public VideoSocketMiddleware(RequestDelegate next, ILogger<SocketMiddleware> logger, VideoSocketSessionService socketSessionService) : base(next, logger, socketSessionService)
         {
 
         }
@@ -36,13 +36,13 @@ namespace SimpleAPI_NetCore50.Websockets
                 return;
             }
 
-            SessionSocket sessionSocket = await SessionService.JoinSession(context, "progress", sessionKey);
+            SessionSocket sessionSocket = await SessionService.JoinSession(context, "stream", sessionKey);
 
             await Receive(sessionSocket.Socket, async (result, buffer) =>
             {
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
-                    await SessionService.ReceiveMessage(sessionSocket.Socket, result, buffer);
+                    await ((VideoSocketSessionService)SessionService).ReceiveMessage(sessionKey, sessionSocket, result, buffer);
                     return;
                 }
                 else if (result.MessageType == WebSocketMessageType.Close)

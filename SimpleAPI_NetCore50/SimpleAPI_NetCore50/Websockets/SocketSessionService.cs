@@ -316,7 +316,7 @@ namespace SimpleAPI_NetCore50.Websockets
             }
         }
 
-        public virtual async Task ReceiveMessage(WebSocket socket, WebSocketReceiveResult result, byte[] buffer)
+        public virtual async Task ReceiveMessage(string sessionKey, SessionSocket sessionSocket, WebSocketReceiveResult result, byte[] buffer)
         {
             // intentionally blank
             // you don't have to do anything with messages you get from the client

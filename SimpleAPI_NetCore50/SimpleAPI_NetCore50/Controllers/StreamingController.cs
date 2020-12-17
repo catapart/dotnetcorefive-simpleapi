@@ -36,10 +36,10 @@ namespace SimpleAPI_NetCore50.Controllers
             ProgressSessionService = progressSessionService;
         }
 
-        [HttpPost("{sessionType}/{sessionKey}")]
+        [HttpPost("progress/{sessionKey}")]
         [DisableRequestSizeLimit]
         [Attributes.DisableFormValueModelBinding]
-        public async Task<IActionResult> UploadFile(string sessionType, string sessionKey)
+        public async Task<IActionResult> UploadFile(string sessionKey)
         {
             FileMap fileMap =  await ProgressSessionService.StreamFileToServer(HttpContext.Request, ModelState, Logger, sessionKey);
 

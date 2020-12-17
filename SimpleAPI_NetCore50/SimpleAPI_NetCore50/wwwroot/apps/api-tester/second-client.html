@@ -1,24 +1,6 @@
 <html>
 <body>
-    <div class="card">
-        <form enctype="multipart/form-data" method="post">
-            <dl>
-                <dt>
-                    <label>File</label>
-                </dt>
-                <dd>
-                    <input name="uploadfile" type="file">
-                </dd>
-            </dl>
-        </form>
-        <button class="websocket-test" type="button">Test Websocket</button>
-        <div>
-            <span>Progress:</span><span class="progress-value"></span><span>/</span><span class="progress-total"></span>
-        </div>
-        <div>
-            <progress id="progress-percent" min="0" max="100" step="1" value="0"></progress>
-        </div>
-    </div>
+    
     <div class="card">
         <header>
             <h2>Messaging</h2>
@@ -26,8 +8,8 @@
                 <h4>Participants</h4>
                 <ul id="messaging-participants"></ul>
             </div>
-            <button id="start-chat" type="button">Start Chat</button>
-            <button id="end-chat" type="button">End Chat</button>
+            <input id="chat-session-key" type="text" placeholder="Session Key" />
+            <button id="join-chat" type="button">Join Chat</button>
         </header>
         <ul id="message-history"></ul>
         <div>
@@ -53,81 +35,16 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
 
-            async function websocketTest_onClick(event) {
-                let totalBytes = $form['uploadfile'].files[0].size;
-                $progressTotal.textContent = totalBytes;
 
-                const response = await fetch(`https://localhost:5001/api/websocket/progress/${totalBytes}`);
-                try {
-                    let sessionKey = await response.text();
-                    console.log(sessionKey);
 
-                    let socket = new WebSocket(`wss://localhost:5001/progress/${sessionKey}`);
-
-                    socket.onopen = function (e) {
-                        console.log("[open] Connection established");
-                        console.log("Sending to server");
-                        socket.send("Handshake");
-                    };
-
-                    socket.onmessage = function (event) {
-                        console.log(`[message] Data received from server: ${event.data}`);
-                        let data = JSON.parse(event.data);
-                        console.log(data);
-                        $progressValue.textContent = data.UnitsCompleted;
-                        $progressPercentage.value = (data.UnitsCompleted / data.UnitTotal) * 100;
-                    };
-
-                    socket.onclose = function (event) {
-                        if (event.wasClean) {
-                            console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
-                        } else {
-                            // e.g. server process killed or network down
-                            // event.code is usually 1006 in this case
-                            console.log('[close] Connection died');
-                        }
-                    };
-
-                    socket.onerror = function (error) {
-                        console.log(`[error] ${error.message}`);
-                    };
-
-                    window.addEventListener('beforeunload', () => {
-                        socket.onclose = function () { }; // disable onclose handler first
-                        socket.close();
-                    }, { once: true });
-
-                    let options =
-                    {
-                        method: "POST",
-                        body: new FormData($form)
-                    };
-
-                    const response2 = await fetch(`https://localhost:5001/api/streaming/progress/${sessionKey}`, options);
-                    if (!response2.ok) {
-                        try {
-                            let result1 = await response2.text();
-                            console.log(result1)
-
-                        } catch (ex) { console.error(ex); }
-                    }
-                    else {
-                        console.log(await response2.json());
-                    }
-
-                } catch (ex) { console.error(ex); }
-            }
-
-            async function startChat_onClick(event)
-            {
+            async function joinChat_onClick(event) {
                 if (chatSocket != null) {
-                    console.error('Session is already active. End the session before starting a new one.');
+                    console.error('Session is already active.');
                     return;
                 }
 
-                const response = await fetch(`https://localhost:5001/api/websocket/stream`);
                 try {
-                    let sessionKey = await response.text();
+                    let sessionKey = $chatSessionKey.value;
                     console.log(sessionKey);
 
                     chatSocket = new WebSocket(`wss://localhost:5001/video/${sessionKey}`);
@@ -146,6 +63,9 @@
                             let value = JSON.parse(data.Message);
                             console.log(value);
                             addChatUpdate(value.status, value.peer);
+                        }
+                        else if (data.Type == 1) {
+
                         }
                         console.log(data);
                     };
@@ -181,10 +101,6 @@
 
                 console.log("Sending to server");
                 chatSocket.send(JSON.stringify({ Message: $message.value }));
-            }
-
-            async function endChat_onClick(event) {
-
             }
 
             async function getWebcam_onClick(event) {
@@ -318,8 +234,7 @@
 
             }
 
-            function addChatUpdate(status, messageData)
-            {
+            function addChatUpdate(status, messageData) {
                 let action = (status == 'join') ? 'joined' : 'left';
                 let displayName = (messageData.DisplayName == '') ? `[${messageData.SocketId}]` : messageData.DisplayName;
                 let $message = document.createElement('li');
@@ -333,15 +248,14 @@
 
                 $messageHistory.appendChild($message);
             }
-            function addChatMessage(messageData)
-            {
+            function addChatMessage(messageData) {
                 let $message = document.createElement('li');
                 $message.classList.add('message');
                 $message.innerHTML = `<header>
-                    <img class="icon">${messageData.IconUrl}" />
-                    <span class="name">${messageData.DisplayName}</span>
-                </header>
-                <div>${messageData.message}</div>`;
+                        <img class="icon">${messageData.IconUrl}" />
+                        <span class="name">${messageData.DisplayName}</span>
+                    </header>
+                    <div>${messageData.message}</div>`;
 
                 $messageHistory.appendChild($message);
             }
@@ -353,15 +267,6 @@
                 }
             }
 
-            var $form = document.querySelector('form');
-            var $file = document.querySelector('input[type="file"]');
-
-
-            var $websocketTest = document.querySelector('.websocket-test');
-            var $progressValue = document.querySelector('span.progress-value');
-            var $progressTotal = document.querySelector('span.progress-total');
-            var $progressPercentage = document.querySelector('progress');
-
 
             var $clientWebcam = document.getElementById('client-webcam');
             var $remoteWebcams = document.getElementById('remote-webcams');
@@ -370,16 +275,15 @@
             var $endVideoChatButton = document.getElementById('end-video-chat');
 
 
-            var $startChat = document.getElementById('start-chat');
-            var $endChat = document.getElementById('end-chat');
+            var $chatSessionKey = document.getElementById('chat-session-key');
+            var $joinChat = document.getElementById('join-chat');
             var $messagingParticipants = document.getElementById('messaging-participants');
             var $messageHistory = document.getElementById('message-history');
             var $message = document.getElementById('message');
             var $sendMessageButton = document.getElementById('send-message');
 
-            $websocketTest.addEventListener('click', websocketTest_onClick);
 
-            $startChat.addEventListener('click', startChat_onClick);
+            $joinChat.addEventListener('click', joinChat_onClick);
             $sendMessageButton.addEventListener('click', sendMessage_onClick);
 
             $getWebcamButton.addEventListener('click', getWebcam_onClick);

@@ -48,10 +48,10 @@ namespace SimpleAPI_NetCore50.Websockets
             return sessionSocket;
         }
 
-        public async override Task ReceiveMessage(WebSocket socket, WebSocketReceiveResult result, byte[] buffer)
+        public async override Task ReceiveMessage(string sessionKey, SessionSocket sessionSocket, WebSocketReceiveResult result, byte[] buffer)
         {
             Schemas.SocketError error = new Schemas.SocketError(){ ErrorCode = "WP_001", Message = "Progress Sessions do not expect messages from the client." };
-            SendMessage(socket, error);
+            SendMessage(sessionSocket.Socket, error);
         }
 
         // Custom functionality

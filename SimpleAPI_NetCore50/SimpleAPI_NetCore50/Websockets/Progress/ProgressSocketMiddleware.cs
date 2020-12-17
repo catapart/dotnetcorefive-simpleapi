@@ -10,22 +10,15 @@ using System.Net.WebSockets;
 
 namespace SimpleAPI_NetCore50.Websockets
 {
-    public class SocketMiddleware
+    public class ProgressSocketMiddleware : SocketMiddleware
     {
-        protected readonly RequestDelegate _next;
 
-
-        protected readonly ILogger<SocketMiddleware> Logger;
-        protected SocketSessionService SessionService { get; set; }
-
-        public SocketMiddleware(RequestDelegate next, ILogger<SocketMiddleware> logger, SocketSessionService socketSessionService)
+        public ProgressSocketMiddleware(RequestDelegate next, ILogger<SocketMiddleware> logger, ProgressSocketSessionService socketSessionService) : base(next, logger, socketSessionService)
         {
-            _next = next;
-            Logger = logger;
-            SessionService = socketSessionService;
+
         }
 
-        public virtual async Task Invoke(HttpContext context)
+        public override async Task Invoke(HttpContext context)
         {
             if (!context.WebSockets.IsWebSocketRequest)
                 return;
@@ -43,7 +36,7 @@ namespace SimpleAPI_NetCore50.Websockets
                 return;
             }
 
-            SessionSocket sessionSocket = await SessionService.JoinSession(context, "unknown", sessionKey);
+            SessionSocket sessionSocket = await SessionService.JoinSession(context, "progress", sessionKey);
 
             await Receive(sessionSocket.Socket, async (result, buffer) =>
             {
@@ -61,17 +54,6 @@ namespace SimpleAPI_NetCore50.Websockets
             });
 
             await _next.Invoke(context);
-        }
-        protected virtual async Task Receive(WebSocket socket, Action<WebSocketReceiveResult, byte[]> handleMessage)
-        {
-            var buffer = new byte[1024 * 4];
-
-            while (socket.State == WebSocketState.Open)
-            {
-                var result = await socket.ReceiveAsync(buffer: new ArraySegment<byte>(buffer), cancellationToken: CancellationToken.None);
-
-                handleMessage(result, buffer);
-            }
         }
     }
 }
