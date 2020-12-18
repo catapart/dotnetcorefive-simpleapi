@@ -28,6 +28,9 @@
             </div>
             <button id="start-chat" type="button">Start Chat</button>
             <button id="end-chat" type="button">End Chat</button>
+            <div>
+                <input id="chat-session-key" type="text" placeholder="Start a chat session to generate a key." disabled />
+            </div>
         </header>
         <ul id="message-history"></ul>
         <div>
@@ -45,7 +48,9 @@
         </div>
     </div>
     <script>
+        var apiDomain = '192.168.254.12';
         var chatSocket = null;
+        var chatParticipants = {};
 
         var videoChatSocket = null;
         var localStream = null;
@@ -57,12 +62,12 @@
                 let totalBytes = $form['uploadfile'].files[0].size;
                 $progressTotal.textContent = totalBytes;
 
-                const response = await fetch(`https://localhost:5001/api/websocket/progress/${totalBytes}`);
+                const response = await fetch(`https://${apiDomain}:5001/api/websocket/progress/${totalBytes}`);
                 try {
                     let sessionKey = await response.text();
                     console.log(sessionKey);
 
-                    let socket = new WebSocket(`wss://localhost:5001/progress/${sessionKey}`);
+                    let socket = new WebSocket(`wss://${apiDomain}:5001/progress/${sessionKey}`);
 
                     socket.onopen = function (e) {
                         console.log("[open] Connection established");
@@ -103,7 +108,7 @@
                         body: new FormData($form)
                     };
 
-                    const response2 = await fetch(`https://localhost:5001/api/streaming/progress/${sessionKey}`, options);
+                    const response2 = await fetch(`https://${apiDomain}:5001/api/streaming/progress/${sessionKey}`, options);
                     if (!response2.ok) {
                         try {
                             let result1 = await response2.text();
@@ -125,12 +130,13 @@
                     return;
                 }
 
-                const response = await fetch(`https://localhost:5001/api/websocket/stream`);
+                const response = await fetch(`https://${apiDomain}:5001/api/websocket/stream`);
                 try {
                     let sessionKey = await response.text();
+                    $chatSessionKey.value = sessionKey;
                     console.log(sessionKey);
 
-                    chatSocket = new WebSocket(`wss://localhost:5001/video/${sessionKey}`);
+                    chatSocket = new WebSocket(`wss://${apiDomain}:5001/video/${sessionKey}`);
 
                     chatSocket.onopen = function (e) {
                         console.log("[open] Connection established");
@@ -142,10 +148,18 @@
                         console.log(`[message] Data received from server: ${event.data}`);
                         let data = JSON.parse(event.data);
 
-                        if (data.Type == 2) {
+                        if (data.Type == 1) {
+                            let value = JSON.parse(data.Message);
+                            console.log(value);
+                            initChat(value);
+                        }
+                        else if (data.Type == 3) {
                             let value = JSON.parse(data.Message);
                             console.log(value);
                             addChatUpdate(value.status, value.peer);
+                        }
+                        else if (data.Type == 6) {
+                            addChatMessage(data.Message);
                         }
                         console.log(data);
                     };
@@ -253,12 +267,12 @@
                 let totalBytes = $form['uploadfile'].files[0].size;
                 $progressTotal.textContent = totalBytes;
 
-                const response = await fetch(`https://localhost:5001/api/websocket/progress/${totalBytes}`);
+                const response = await fetch(`https://${apiDomain}:5001/api/websocket/progress/${totalBytes}`);
                 try {
                     let sessionKey = await response.text();
                     console.log(sessionKey);
 
-                    let socket = new WebSocket(`wss://localhost:5001/progress/${sessionKey}`);
+                    let socket = new WebSocket(`wss://${apiDomain}:5001/progress/${sessionKey}`);
 
                     socket.onopen = function (e) {
                         console.log("[open] Connection established");
@@ -299,7 +313,7 @@
                         body: new FormData($form)
                     };
 
-                    const response2 = await fetch(`https://localhost:5001/api/streaming/progress/${sessionKey}`, options);
+                    const response2 = await fetch(`https://${apiDomain}:5001/api/streaming/progress/${sessionKey}`, options);
                     if (!response2.ok) {
                         try {
                             let result1 = await response2.text();
@@ -318,20 +332,58 @@
 
             }
 
+            function initChat(messageData) {
+                chatParticipants[messageData.SessionToken.SocketId] = messageData.SessionToken;
+                updateParticipants(messageData.Participants);
+                let displayName = (messageData.SessionToken.DisplayName == '') ? messageData.SessionToken.SocketId : messageData.SessionToken.DisplayName;
+                let $message = document.createElement('li');
+                $message.classList.add('message', 'status');
+
+                if (messageData.HostId == messageData.SessionToken.SocketId) {
+                    $message.innerHTML = `<div>Host ${displayName} has started the chat.</div>`;
+                }
+                else {
+                    $message.innerHTML = `<div>You have joined the chat as ${displayName}.</div>`;
+                }
+
+                $messageHistory.appendChild($message);
+            }
+            function updateParticipants(participants) {
+                while ($messagingParticipants.lastChild) {
+                    $messagingParticipants.lastChild.remove();
+                }
+
+                for (let property in participants) {
+
+                    let participant = participants[property];
+                    let displayName = (participant.DisplayName == '') ? `[${participant.SocketId}]` : participant.DisplayName;
+                    let $participant = document.createElement('li');
+                    $participant.classList.add('participant');
+                    $participant.textContent = displayName;
+                    $messagingParticipants.appendChild($participant);
+                }
+            }
             function addChatUpdate(status, messageData)
             {
-                let action = (status == 'join') ? 'joined' : 'left';
+                let action = (status == 'connect') ? 'joined' : 'left';
                 let displayName = (messageData.DisplayName == '') ? `[${messageData.SocketId}]` : messageData.DisplayName;
                 let $message = document.createElement('li');
                 $message.classList.add('message', 'status');
                 $message.innerHTML = `<div>${displayName} has ${action} the chat.</div>`;
 
-                let $participant = document.createElement('li');
-                $participant.classList.add('participant');
-                $participant.textContent = displayName;
-                $messagingParticipants.appendChild($participant);
-
                 $messageHistory.appendChild($message);
+
+                if (status == 'connect') {
+                    chatParticipants[messageData.SocketId] = messageData;
+                }
+                else if (status == 'disconnect') {
+                    let participant = chatParticipants[messageData.SocketId];
+                    if (participant != null) {
+                        delete chatParticipants[messageData.SocketId];
+                    }
+                }
+
+                updateParticipants(chatParticipants);
             }
             function addChatMessage(messageData)
             {
@@ -368,6 +420,7 @@
             var $getWebcamButton = document.getElementById('get-webcam-feed');
             var $startVideoChatButton = document.getElementById('start-video-chat');
             var $endVideoChatButton = document.getElementById('end-video-chat');
+            var $chatSessionKey = document.getElementById('chat-session-key');
 
 
             var $startChat = document.getElementById('start-chat');

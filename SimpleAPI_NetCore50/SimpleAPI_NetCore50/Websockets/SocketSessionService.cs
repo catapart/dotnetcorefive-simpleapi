@@ -88,10 +88,11 @@ namespace SimpleAPI_NetCore50.Websockets
 
         public virtual async Task EndSession(string sessionKey)
         {
-            SocketSession session;
-            Sessions.TryRemove(sessionKey, out session);
-
+            SocketSession session = GetSessionByKey(sessionKey);
             await session.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closed by the Session Service.", CancellationToken.None);
+
+            SocketSession removedSession;
+            Sessions.TryRemove(sessionKey, out removedSession);
 
             KeyValuePair<string, ISessionAttribute[]> preparedSession = GetPreparedSession(sessionKey);
             if (!preparedSession.Equals(default(KeyValuePair<string, ISessionAttribute[]>)))

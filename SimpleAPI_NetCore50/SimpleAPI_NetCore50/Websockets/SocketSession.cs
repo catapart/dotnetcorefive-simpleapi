@@ -68,19 +68,22 @@ namespace SimpleAPI_NetCore50.Websockets
         {
             Sockets.TryAdd(CreateSocketId(), sessionSocket);
         }
-        public async Task RemoveSessionSocket(string key)
+        public async Task RemoveSessionSocket(string socketId)
         {
             SessionSocket socket;
-            Sockets.TryRemove(key, out socket);
-            await socket.Socket.CloseAsync(closeStatus: WebSocketCloseStatus.NormalClosure, statusDescription: "Closed by the SocketSession", cancellationToken: CancellationToken.None);
+            Sockets.TryRemove(socketId, out socket);
+
+            if (socket != null && socket.Socket.State != WebSocketState.Closed)
+            {
+                await socket.Socket.CloseAsync(closeStatus: WebSocketCloseStatus.NormalClosure, statusDescription: "Closed by the SocketSession", cancellationToken: CancellationToken.None);
+            }
         }
 
         public async Task CloseAsync(WebSocketCloseStatus closeStatus, string statusDescription, CancellationToken cancellationToken)
         {
-            await Task.WhenAll(Sockets.Select(pair => pair.Value.Socket.CloseAsync(closeStatus: closeStatus, statusDescription: statusDescription, cancellationToken: cancellationToken)));
+            IEnumerable<Task> tasks = Sockets.Select(pair => RemoveSessionSocket(pair.Value.Token.SocketId));
+            await Task.WhenAll(tasks);
         }
-
-        
        
 
         public T GetAttributeValue<T>(string name)

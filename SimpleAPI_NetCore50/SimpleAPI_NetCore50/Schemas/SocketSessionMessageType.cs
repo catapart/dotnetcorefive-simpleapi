@@ -8,6 +8,7 @@ namespace SimpleAPI_NetCore50.Schemas
     public enum SocketSessionMessageType
     {
         Unknown, // error checking
+        Property, // for properites like the participants list or the host id
         Heartbeat, // keep-alive signals
         StatusUpdate, // user joined/user left/user is typing/user is asleep/etc
         Notification, // relationship added/username tagged/ etc

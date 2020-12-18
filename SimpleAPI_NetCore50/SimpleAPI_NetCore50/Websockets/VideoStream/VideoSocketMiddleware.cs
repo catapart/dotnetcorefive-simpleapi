@@ -47,8 +47,25 @@ namespace SimpleAPI_NetCore50.Websockets
                 }
                 else if (result.MessageType == WebSocketMessageType.Close)
                 {
-                    await SessionService.EndSession(sessionKey);
-                    return;
+
+                    SocketSession targetSession = SessionService.GetSessionByKey(sessionKey);
+                    string hostId = targetSession.GetAttributeValue<string>("hostId");
+
+                    // if the host quit, kill the session
+                    if(sessionSocket.Token.SocketId == hostId)
+                    {
+                        await SessionService.EndSession(sessionKey);
+                        return;
+                    }
+
+                    // otherwise, disconnect and alert host that someone has disconnected
+                    await targetSession.RemoveSessionSocket(sessionSocket.Token.SocketId);
+                    Schemas.SocketSessionMessageRequest messageRequest = new Schemas.SocketSessionMessageRequest()
+                    {
+                        Type = Schemas.SocketSessionMessageType.StatusUpdate,
+                        Message = System.Text.Json.JsonSerializer.Serialize(new { status = "disconnect", peer = sessionSocket.Token })
+                    };
+                    SessionService.SendMessage(sessionKey, hostId, messageRequest);
                 }
 
             });

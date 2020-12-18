@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace SimpleAPI_NetCore50.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/app")]
     [ApiController]
     public class ApplicationController : Controller
     {

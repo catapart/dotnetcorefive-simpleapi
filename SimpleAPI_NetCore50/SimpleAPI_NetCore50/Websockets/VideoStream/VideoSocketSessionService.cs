@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Net.WebSockets;
 using System.Threading.Tasks;
 using System.Text;
+using System.Linq;
 using SimpleAPI_NetCore50.Schemas;
 
 namespace SimpleAPI_NetCore50.Websockets
@@ -39,16 +40,25 @@ namespace SimpleAPI_NetCore50.Websockets
             }
             else
             {
-                // alert host that someone has joined
+                // alert host that someone has connected
                 hostId = targetSession.GetAttributeValue<string>("hostId");
+
+                SocketSessionMessageRequest messageRequest = new SocketSessionMessageRequest()
+                {
+                    Type = SocketSessionMessageType.StatusUpdate,
+                    Message = System.Text.Json.JsonSerializer.Serialize(new { status = "connect", peer = sessionSocket.Token })
+                };
+                SendMessage(sessionKey, hostId, messageRequest);
             }
 
-            SocketSessionMessageRequest messageRequest = new SocketSessionMessageRequest()
+            // alert requester session token and current participants
+            Models.SocketToken[] participants = targetSession.GetSockets().Select(pair => pair.Value.Token).ToArray();
+            SocketSessionMessageRequest participantMessageRequest = new SocketSessionMessageRequest()
             {
-                Type = SocketSessionMessageType.StatusUpdate,
-                Message = System.Text.Json.JsonSerializer.Serialize(new { status = "join", peer = sessionSocket.Token })
+                Type = SocketSessionMessageType.Property,
+                Message = System.Text.Json.JsonSerializer.Serialize(new { HostId = hostId, SessionToken = sessionSocket.Token, Participants = participants })
             };
-            SendMessage(sessionKey, hostId, messageRequest);
+            SendMessage(sessionSocket, participantMessageRequest);
 
             return sessionSocket;
         }
