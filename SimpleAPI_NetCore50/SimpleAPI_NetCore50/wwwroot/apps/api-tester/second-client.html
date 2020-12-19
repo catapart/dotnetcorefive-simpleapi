@@ -9,6 +9,10 @@
                 <ul id="messaging-participants"></ul>
             </div>
             <input id="chat-session-key" type="text" placeholder="Session Key" />
+            <div>
+                <span class="title">Display Name:</span>
+                <input id="chat-display-name" type="text" />
+            </div>
             <button id="join-chat" type="button">Join Chat</button>
         </header>
         <ul id="message-history"></ul>
@@ -29,7 +33,9 @@
     <script>
         var apiDomain = '192.168.254.12';
         var chatSocket = null;
-        var chatParticipants = [];
+        var hostSessionToken = null;
+        var participantId = null;
+        var chatParticipants = {};
 
         var videoChatSocket = null;
         var localStream = null;
@@ -53,26 +59,30 @@
 
                     chatSocket.onopen = function (e) {
                         console.log("[open] Connection established");
-
-                        console.log(e);
                     };
 
                     chatSocket.onmessage = function (event) {
                         console.log(`[message] Data received from server: ${event.data}`);
                         let data = JSON.parse(event.data);
 
-                        if (data.Type == 1) {
+                        if (data.MessageType == 1) {
                             let value = JSON.parse(data.Message);
                             console.log(value);
                             initChat(value);
                         }
-                        else if (data.Type == 3) {
+                        else if (data.MessageType == 3) {
+                            let value = JSON.parse(data.Message);
+                            console.log(value);
+                            updateParticipant(value);
+                            updateParticipants();
+                        }
+                        else if (data.MessageType == 5) {
                             let value = JSON.parse(data.Message);
                             console.log(value);
                             addChatUpdate(value.status, value.peer);
                         }
-                        else if (data.Type == 6) {
-                            addChatMessage(data.Message);
+                        else if (data.MessageType == 8) {
+                            addChatMessage(data);
                         }
                         console.log(data);
                     };
@@ -107,6 +117,7 @@
                 }
 
                 console.log("Sending to server");
+                addChatMessage({ SenderId: participantId, Message: $message.value });
                 chatSocket.send(JSON.stringify({ Message: $message.value }));
             }
 
@@ -242,29 +253,78 @@
             }
 
             function initChat(messageData) {
-
-                chatParticipants.push(messageData.SessionToken);
+                participantId = messageData.SessionToken.SocketId;
+                // add all participants that are already in the session
+                for (let i = 0; i < messageData.Participants.length; i++) {
+                    if (messageData.Participants[i].SocketId == messageData.HostId) {
+                        hostSessionToken = messageData.Participants[i];
+                    }
+                    updateParticipant(messageData.Participants[i], messageData.HostId, false);
+                }
                 updateParticipants(messageData.Participants);
-                let displayName = (messageData.SessionToken.DisplayName == '') ? messageData.SessionToken.SocketId : messageData.SessionToken.DisplayName;
-                let $message = document.createElement('li');
-                $message.classList.add('message', 'status');
 
-                if (messageData.HostId == messageData.SessionToken.SocketId) {
-                    $message.innerHTML = `<div>Host ${displayName} has started the chat.</div>`;
-                }
-                else {
-                    $message.innerHTML = `<div>You have joined the chat as ${displayName}.</div>`;
-                }
-
-                $messageHistory.appendChild($message);
+                makeIntroduction(messageData.SessionToken);
             }
-            function updateParticipants(participants) {
+
+            function makeIntroduction(token) {
+                token.DisplayName = $chatDisplayName.value;
+                token.IconUrl = '';
+
+                console.log("Sending Introduction: ", token);
+                let message = JSON.stringify(token);
+                chatSocket.send(JSON.stringify({ Type: 2, SenderId: token.SocketId, Message: message }));
+            }
+
+            function updateParticipant(token, hostId, reportUpdate = true) {
+                let dirtyToken = null;
+                if (chatParticipants[token.SocketId] != null) {
+                    dirtyToken = Object.assign({ initialized: false }, chatParticipants[token.SocketId]);
+                }
+
+                chatParticipants[token.SocketId] = token;
+
+                if (reportUpdate === true) {
+                    let displayName = (token.DisplayName == '') ? token.SocketId : token.DisplayName;
+                    let $message = document.createElement('li');
+                    $message.classList.add('message', 'status');
+
+                    if (dirtyToken != null) {
+
+                        let dirtyTokenDisplayName = (dirtyToken.DisplayName == '') ? dirtyToken.SocketId : dirtyToken.DisplayName;
+                        if (dirtyToken.initialized != null) {
+                            $message.innerHTML = `<div>${displayName} has joined the chat.</div>`;
+                            delete dirtyToken.initialized;
+                        }
+                        else if (dirtyTokenDisplayName != displayName) {
+                            $message.innerHTML = `<div>${displayName} has updated their Display Name <em>[Formerly: ${dirtyTokenDisplayName}].</div>`;
+                        }
+                    }
+                    else {
+                        if (hostSessionToken.SocketId == token.SocketId) {
+                            $message.innerHTML = `<div>Host ${displayName} has started the chat.</div>`;
+                        }
+                        else {
+                            chatParticipants[hostId] = hostSessionToken;
+                            $message.innerHTML = `<div>${displayName} has joined the chat.</div>`;
+                        }
+
+                    }
+
+                    $messageHistory.appendChild($message);
+
+                    if (hostSessionToken.SocketId == participantId) {
+                        chatSocket.send(JSON.stringify({ Type: 3, SenderId: participantId, Message: JSON.stringify(token) }))
+                    }
+                }
+            }
+            function updateParticipants() {
                 while ($messagingParticipants.lastChild) {
                     $messagingParticipants.lastChild.remove();
                 }
 
-                for (let i = 0; i < participants.length; i++) {
-                    let participant = participants[i];
+                for (let property in chatParticipants) {
+
+                    let participant = chatParticipants[property];
                     let displayName = (participant.DisplayName == '') ? `[${participant.SocketId}]` : participant.DisplayName;
                     let $participant = document.createElement('li');
                     $participant.classList.add('participant');
@@ -273,7 +333,6 @@
                 }
             }
             function addChatUpdate(status, messageData) {
-
                 let action = (status == 'connect') ? 'joined' : 'left';
                 let displayName = (messageData.DisplayName == '') ? `[${messageData.SocketId}]` : messageData.DisplayName;
                 let $message = document.createElement('li');
@@ -283,25 +342,30 @@
                 $messageHistory.appendChild($message);
 
                 if (status == 'connect') {
-                    chatParticipants.push(messageData);
+                    chatParticipants[messageData.SocketId] = messageData;
                 }
                 else if (status == 'disconnect') {
-                    let participantIndex = chatParticipants.indexOf(messageData);
-                    if (participantIndex > -1) {
-                        chatParticipants.splice(participantIndex, 1);
+                    let participant = chatParticipants[messageData.SocketId];
+                    if (participant != null) {
+                        delete chatParticipants[messageData.SocketId];
                     }
                 }
 
                 updateParticipants(chatParticipants);
             }
             function addChatMessage(messageData) {
+                let participant = chatParticipants[messageData.SenderId];
+                if (participant == null) {
+                    console.error('Unknown Participant. Socket ID: ' + messageData.SenderId);
+                    return;
+                }
                 let $message = document.createElement('li');
                 $message.classList.add('message');
                 $message.innerHTML = `<header>
-                        <img class="icon">${messageData.IconUrl}" />
-                        <span class="name">${messageData.DisplayName}</span>
-                    </header>
-                    <div>${messageData.message}</div>`;
+                    <img class="icon" src="${participant.IconUrl || ''}" />
+                    <span class="name">${participant.DisplayName || ''}</span>
+                </header>
+                <div>${messageData.Message}</div>`;
 
                 $messageHistory.appendChild($message);
             }
@@ -320,7 +384,7 @@
             var $startVideoChatButton = document.getElementById('start-video-chat');
             var $endVideoChatButton = document.getElementById('end-video-chat');
 
-
+            var $chatDisplayName = document.getElementById('chat-display-name');
             var $chatSessionKey = document.getElementById('chat-session-key');
             var $joinChat = document.getElementById('join-chat');
             var $messagingParticipants = document.getElementById('messaging-participants');

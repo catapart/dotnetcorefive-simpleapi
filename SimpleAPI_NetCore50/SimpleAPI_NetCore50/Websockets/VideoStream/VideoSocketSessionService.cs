@@ -42,23 +42,17 @@ namespace SimpleAPI_NetCore50.Websockets
             {
                 // alert host that someone has connected
                 hostId = targetSession.GetAttributeValue<string>("hostId");
-
-                SocketSessionMessageRequest messageRequest = new SocketSessionMessageRequest()
-                {
-                    Type = SocketSessionMessageType.StatusUpdate,
-                    Message = System.Text.Json.JsonSerializer.Serialize(new { status = "connect", peer = sessionSocket.Token })
-                };
-                SendMessage(sessionKey, hostId, messageRequest);
             }
 
             // alert requester session token and current participants
             Models.SocketToken[] participants = targetSession.GetSockets().Select(pair => pair.Value.Token).ToArray();
-            SocketSessionMessageRequest participantMessageRequest = new SocketSessionMessageRequest()
+
+            SocketSessionMessageResponse response = new SocketSessionMessageResponse()
             {
-                Type = SocketSessionMessageType.Property,
+                MessageType = SocketSessionMessageType.Property,
                 Message = System.Text.Json.JsonSerializer.Serialize(new { HostId = hostId, SessionToken = sessionSocket.Token, Participants = participants })
             };
-            SendMessage(sessionSocket, participantMessageRequest);
+            SendMessage(sessionSocket, response);
 
             return sessionSocket;
         }
@@ -72,7 +66,7 @@ namespace SimpleAPI_NetCore50.Websockets
 
                 string serializedMessage = Encoding.UTF8.GetString(buffer, 0, result.Count);
                 SocketSessionMessageRequest messageRequest = System.Text.Json.JsonSerializer.Deserialize<SocketSessionMessageRequest>(serializedMessage);
-                if(messageRequest.Type == null)
+                if(messageRequest.Type == SocketSessionMessageType.Unknown)
                 {
                     messageRequest.Type = SocketSessionMessageType.Text;
                 }
@@ -83,11 +77,23 @@ namespace SimpleAPI_NetCore50.Websockets
                 string message = "";
                 switch(messageRequest.Type)
                 {
+                    case SocketSessionMessageType.Introduction:
+                        Models.SocketToken token = System.Text.Json.JsonSerializer.Deserialize<Models.SocketToken>(messageRequest.Message);
+                        sessionSocket.Token.DisplayName = token.DisplayName;
+                        sessionSocket.Token.IconUrl = token.IconUrl;
+
+                        string hostId = socketSession.GetAttributeValue<string>("hostId");
+                        SocketSessionMessageResponse hostAlertResponse = new SocketSessionMessageResponse()
+                        {
+                            MessageType = SocketSessionMessageType.Participant,
+                            Message = System.Text.Json.JsonSerializer.Serialize(sessionSocket.Token)
+                        };
+                        SendMessage(sessionKey, hostId, hostAlertResponse);
+                        return;
+                    case SocketSessionMessageType.Participant:
                     case SocketSessionMessageType.StatusUpdate:
-                        message = messageRequest.Message;
-                        break;
                     case SocketSessionMessageType.Text:
-                        message = $"{displayName} ({socketId}) said: {messageRequest.Message}";
+                        message = messageRequest.Message;
                         break;
                     case SocketSessionMessageType.Reaction:
                         if (messageRequest.TargetMessageId == null)
@@ -102,6 +108,7 @@ namespace SimpleAPI_NetCore50.Websockets
                 SocketSessionMessageResponse messageResponse = new Schemas.SocketSessionMessageResponse()
                 {
                     MessageId = messages.Count,
+                    MessageType = messageRequest.Type,
                     Message = message,
                     SenderId = sessionSocket.Token.SocketId,
                     Recipients = messageRequest.Recipients
@@ -109,13 +116,13 @@ namespace SimpleAPI_NetCore50.Websockets
 
                 messages.Add(messageResponse);
 
-                if (messageRequest.Recipients.Length == 0)
+                if (messageRequest.Recipients == null || messageRequest.Recipients.Length == 0)
                 {
-                    SendMessageToPeers(sessionKey, socketId, message);
+                    SendMessageToPeers(sessionKey, socketId, messageResponse);
                 }
                 else
                 {
-                    SendMessage(sessionKey, messageRequest.Recipients, message);
+                    SendMessage(sessionKey, messageRequest.Recipients, messageResponse);
                 }
             }
             catch(Exception exception)

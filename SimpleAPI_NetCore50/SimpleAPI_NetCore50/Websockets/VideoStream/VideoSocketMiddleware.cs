@@ -60,12 +60,12 @@ namespace SimpleAPI_NetCore50.Websockets
 
                     // otherwise, disconnect and alert host that someone has disconnected
                     await targetSession.RemoveSessionSocket(sessionSocket.Token.SocketId);
-                    Schemas.SocketSessionMessageRequest messageRequest = new Schemas.SocketSessionMessageRequest()
+                    Schemas.SocketSessionMessageResponse response = new Schemas.SocketSessionMessageResponse()
                     {
-                        Type = Schemas.SocketSessionMessageType.StatusUpdate,
+                        MessageType = Schemas.SocketSessionMessageType.StatusUpdate,
                         Message = System.Text.Json.JsonSerializer.Serialize(new { status = "disconnect", peer = sessionSocket.Token })
                     };
-                    SessionService.SendMessage(sessionKey, hostId, messageRequest);
+                    SessionService.SendMessage(sessionKey, hostId, response);
                 }
 
             });
