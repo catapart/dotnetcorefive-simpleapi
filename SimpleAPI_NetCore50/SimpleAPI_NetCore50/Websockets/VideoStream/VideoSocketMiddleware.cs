@@ -62,8 +62,8 @@ namespace SimpleAPI_NetCore50.Websockets
                     await targetSession.RemoveSessionSocket(sessionSocket.Token.SocketId);
                     Schemas.SocketSessionMessageResponse response = new Schemas.SocketSessionMessageResponse()
                     {
-                        MessageType = Schemas.SocketSessionMessageType.StatusUpdate,
-                        Message = System.Text.Json.JsonSerializer.Serialize(new { status = "disconnect", peer = sessionSocket.Token })
+                        MessageType = Schemas.SocketSessionMessageType.StatusUpdates,
+                        Message = System.Text.Json.JsonSerializer.Serialize(new object[] { new { Status = "disconnect", Peers = new Models.SocketToken[1] { sessionSocket.Token } } })
                     };
                     SessionService.SendMessage(sessionKey, hostId, response);
                 }

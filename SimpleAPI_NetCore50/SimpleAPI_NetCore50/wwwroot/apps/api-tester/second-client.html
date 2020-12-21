@@ -14,6 +14,7 @@
                 <input id="chat-display-name" type="text" />
             </div>
             <button id="join-chat" type="button">Join Chat</button>
+            <button id="leave-chat" type="button">Leave Chat</button>
         </header>
         <ul id="message-history"></ul>
         <div>
@@ -32,94 +33,475 @@
     </div>
     <script>
         var apiDomain = '192.168.254.12';
-        var chatSocket = null;
-        var hostSessionToken = null;
-        var participantId = null;
-        var chatParticipants = {};
+        var chatSession = null;
 
         var videoChatSocket = null;
         var localStream = null;
         var remoteStreams = [];
 
+        const socketMessageTypeMap =
+            [
+                'Unknown', // error checking
+                'Greeting', // sending the initial session token and host token
+                'Introduction', // for gaining access to channels / providing user data like name/profile pic
+                'Heartbeat', // keep-alive signals
+                'Properties', // for properties like the participants list or the host id
+                'StatusUpdates', // users joined/users left/users are typing/users are asleep/etc
+                'Notifications', // relationship added/username tagged/ etc
+                'Reaction', // reaction to a message
+                'Text', // Text message
+                'FormattedText', // Text message that should be handled with special cases
+                'Url', // images/videos/audio/media/files anything linked via url
+                'ByteArray' // binary data
+            ];
+        class WebsocketSession {
+            constructor() {
+                this.domain = '192.168.254.12';
+
+                this.socket = null;
+                this.token = null;
+                this.hostToken = null;
+                this.peerTokens = {};
+                this.offer = null;
+
+                let node = document.createTextNode(null);
+                this.addEventListener = node.addEventListener.bind(node);
+                this.removeEventListener = node.removeEventListener.bind(node);
+                this.dispatchEvent = node.dispatchEvent.bind(node);
+            }
+
+            async host(displayName, iconUrl, handlers) {
+
+
+                let response = await fetch(`https://${this.domain}:5001/api/websocket/stream`);
+                let sessionKey = await response.text();
+                console.log("Established new websocket session: ", sessionKey);
+                let url = `wss://${this.domain}:5001/video/${sessionKey}`;
+
+                return this.connect(url, displayName, iconUrl, handlers);
+            }
+            async join(sessionKey, displayName, iconUrl, handlers) {
+                let url = `wss://${this.domain}:5001/video/${sessionKey}`;
+                return this.connect(url, displayName, iconUrl, handlers);
+            }
+
+            async connect(url, displayName, iconUrl, handlers) {
+
+                this.displayName = displayName;
+                this.iconUrl = iconUrl || '';
+
+                return new Promise(async (resolve, reject) => {
+                    handlers = handlers || {};
+                    handlers.onOpen = handlers.onOpen || this.websocket_onOpen.bind(this);
+                    handlers.onMessage = handlers.onMessage || this.websocket_onMessage.bind(this);
+                    handlers.onClose = handlers.onClose || this.websocket_onClose.bind(this);
+                    handlers.onError = handlers.onError || this.websocket_onError.bind(this);
+                    try {
+                        if (this.socket != null) {
+                            this.close();
+                        }
+
+                        this.socket = new WebSocket(url);
+
+                        this.socket.onopen = (event) => { resolve(); handlers.onOpen(event); }
+                        this.socket.onmessage = handlers.onMessage;
+                        this.socket.onclose = handlers.onClose;
+                        this.socket.onerror = handlers.onError;
+
+                        window.addEventListener('beforeunload', () => {
+                            this.socket.onclose = function () { }; // disable onclose handler first
+                            this.socket.close();
+                        }, { once: true });
+
+                    }
+                    catch (ex) {
+                        console.error(ex);
+                        reject();
+                    }
+                })
+            }
+            async send(message) {
+                this.socket.send(message);
+            }
+            async close() {
+                this.socket.close();
+            }
+
+            //handlers
+            async websocket_onOpen(event) {
+                console.log("[Websocket] Connection established");
+            }
+            async websocket_onMessage(event) {
+                console.log(`[Websocket] Data received from server: ${event.data}`);
+                let data = JSON.parse(event.data);
+
+                // delegate event to specialized functions
+                // dispatch event if it's unrelated to the websocket session (messages/notifications/etc)
+                switch (socketMessageTypeMap[data.MessageType]) {
+                    case 'Greeting':
+                        let greetingValue = JSON.parse(data.Message);
+                        console.log(greetingValue);
+                        this.initSession(greetingValue);
+                        let greetingEvent = new CustomEvent('greeting', { detail: greetingValue });
+                        this.dispatchEvent(greetingEvent);
+                        break;
+                    case 'Introduction':
+                        console.error('Client should never receive "Introduction" Message Type.');
+                        return;
+                    case 'Heartbeat':
+                        console.log('[Websocket] Heartbeat received.');
+                        // don't usually dispatch heartbeats, but I'm not utilizing them, either.
+                        break;
+                    case 'Properties':
+                        let propertiesValue = JSON.parse(data.Message);
+                        console.log(propertiesValue);
+                        let propertiesEvent = new CustomEvent('properties', { detail: propertiesValue });
+                        this.dispatchEvent(propertiesEvent);
+                        break;
+                    case 'StatusUpdates':
+                        let statusUpdatesValue = JSON.parse(data.Message);
+                        console.log(statusUpdatesValue);
+                        let connectionUpdates = this.getConnectionUpdates(statusUpdatesValue);
+                        if (connectionUpdates.length > 0) {
+                            this.updatePeerStatus(connectionUpdates);
+                            let peersEvent = new CustomEvent('peers', { detail: connectionUpdates });
+                            this.dispatchEvent(peersEvent);
+                        }
+                        let otherUpdates = statusUpdatesValue.filter((item) => { return (item.Status.toLowerCase().indexOf('connect') == -1); });
+                        if (otherUpdates.length > 0) {
+                            let statusUpdatesEvent = new CustomEvent('statusupdates', { detail: otherUpdates });
+                            this.dispatchEvent(statusUpdatesEvent);
+                        }
+                        break;
+                    case 'Notifications':
+                        console.log('[Websocket] Notifications received.');
+                        let notificationsEvent = new CustomEvent('notifications', { detail: otherUpdates });
+                        this.dispatchEvent(notificationsEvent);
+                        break;
+                    case 'Reaction':
+                        console.log('[Websocket] Reaction received.');
+                        let reactionEvent = new CustomEvent('reaction', { detail: data });
+                        this.dispatchEvent(reactionEvent);
+                        break;
+                    case 'Text':
+                    case 'FormattedText':
+                    case 'Url':
+                    case 'ByteArray':
+                        console.log('[Websocket] Message received.');
+                        let messageEvent = new CustomEvent('message', { detail: data });
+                        this.dispatchEvent(messageEvent);
+                        break;
+                    case 'Unknown':
+                    default:
+                        console.error("[Websocket] Unknown Message Type: " + data.MessageType);
+                        return;
+                }
+            }
+            async websocket_onClose(event) {
+
+                if (event.wasClean) {
+                    console.log(`[Websocket] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
+                } else {
+                    // e.g. server process killed or network down
+                    // event.code is usually 1006 in this case
+                    console.log('[Websocket] Connection died');
+                }
+                this.socket = null;
+                let messageEvent = new CustomEvent('close');
+                this.dispatchEvent(messageEvent);
+            }
+            async websocket_onError(event) {
+
+                console.error(`[Websocket] ${error.message}`);
+            }
+
+
+            //functionality
+            initSession(greeting) {
+
+                this.token = greeting.Token;
+                this.hostToken = greeting.HostToken;
+
+                this.updatePeers(greeting.Peers);
+
+                this.makeIntroduction();
+
+            }
+            makeIntroduction() {
+
+                let displayName = this.displayName || this.token.SocketId;
+                this.token.DisplayName = displayName;
+                this.token.IconUrl = '';
+
+                console.log("Sending Introduction: ", this.token);
+                let message = JSON.stringify(this.token);
+                this.socket.send(JSON.stringify({ Type: 2, SenderId: this.token, Message: message }));
+            }
+
+            getConnectionUpdates(statusUpdates) {
+                let connectionUpdates = [];
+                for (let i = 0; i < statusUpdates.length; i++) {
+                    let statusUpdate = statusUpdates[i];
+                    if (statusUpdate.Status == 'connect') {
+                        connectionUpdates.push(statusUpdate);
+                    }
+                    else if (statusUpdate.Status == 'disconnect') {
+                        this.removePeers(statusUpdate.Peers);
+                        connectionUpdates.push(statusUpdate);
+                    }
+                }
+
+                return connectionUpdates;
+            }
+
+            updatePeerStatus(updates) {
+                for (let i = 0; i < updates.length; i++) {
+                    let update = updates[i];
+                    if (update.status == 'disconnect') {
+                        this.removePeers(update.Peers);
+                        continue;
+                    }
+                    this.updatePeers(update.Peers);
+                }
+            }
+            updatePeers(peers) {
+                if (peers == null) {
+                    return;
+                }
+                for (let i = 0; i < peers.length; i++) {
+                    let peer = peers[i];
+                    this.updatePeer(peer);
+                }
+            }
+            updatePeer(peer) {
+                this.peerTokens[peer.SocketId] = peer;
+            }
+            removePeers(peers) {
+                if (peers == null) {
+                    return;
+                }
+                for (let i = 0; i < peers.length; i++) {
+                    let peer = peers[i];
+                    this.removePeer(peer);
+                }
+            }
+            removePeer(peer) {
+                delete this.peerTokens[peer.SocketId];
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
 
-
-
             async function joinChat_onClick(event) {
-                if (chatSocket != null) {
-                    console.error('Session is already active.');
+                if (chatSession != null) {
+                    console.error('Session is already active. End the session before starting a new one.');
                     return;
                 }
 
-                try {
-                    let sessionKey = $chatSessionKey.value;
-                    console.log(sessionKey);
+                clearChatHistory();
+                clearChatParticipants();
 
-                    chatSocket = new WebSocket(`wss://${apiDomain}:5001/video/${sessionKey}`);
-
-                    chatSocket.onopen = function (e) {
-                        console.log("[open] Connection established");
-                    };
-
-                    chatSocket.onmessage = function (event) {
-                        console.log(`[message] Data received from server: ${event.data}`);
-                        let data = JSON.parse(event.data);
-
-                        if (data.MessageType == 1) {
-                            let value = JSON.parse(data.Message);
-                            console.log(value);
-                            initChat(value);
-                        }
-                        else if (data.MessageType == 3) {
-                            let value = JSON.parse(data.Message);
-                            console.log(value);
-                            updateParticipant(value);
-                            updateParticipants();
-                        }
-                        else if (data.MessageType == 5) {
-                            let value = JSON.parse(data.Message);
-                            console.log(value);
-                            addChatUpdate(value.status, value.peer);
-                        }
-                        else if (data.MessageType == 8) {
-                            addChatMessage(data);
-                        }
-                        console.log(data);
-                    };
-
-                    chatSocket.onclose = function (event) {
-                        if (event.wasClean) {
-                            console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
-                        } else {
-                            // e.g. server process killed or network down
-                            // event.code is usually 1006 in this case
-                            console.log('[close] Connection died');
-                        }
-                        chatSocket = null;
-                    };
-
-                    chatSocket.onerror = function (error) {
-                        console.log(`[error] ${error.message}`);
-                    };
-
-                    window.addEventListener('beforeunload', () => {
-                        chatSocket.onclose = function () { }; // disable onclose handler first
-                        chatSocket.close();
-                    }, { once: true });
-
-                } catch (ex) { console.error(ex); }
+                chatSession = new WebsocketSession();
+                chatSession.addEventListener('greeting', chatSession_OnGreeting);
+                chatSession.addEventListener('peers', chatSession_OnPeers);
+                chatSession.addEventListener('message', chatSession_OnMessage);
+                chatSession.addEventListener('close', chatSession_OnClose);
+                await chatSession.join($chatSessionKey.value, $chatDisplayName.value);
             }
 
             async function sendMessage_onClick(event) {
-                if (chatSocket == null) {
+                if (chatSession == null) {
                     console.error("No session has been started.");
                     return;
                 }
 
                 console.log("Sending to server");
-                addChatMessage({ SenderId: participantId, Message: $message.value });
-                chatSocket.send(JSON.stringify({ Message: $message.value }));
+                addChatMessage({ SenderId: chatSession.token.SocketId, Message: $message.value });
+                chatSession.send(JSON.stringify({ Message: $message.value }));
             }
+
+            async function leaveChat_onClick(event) {
+                if (chatSession == null) {
+                    return;
+                }
+                chatSession.ending = true;
+                await chatSession.close();
+            }
+
+
+            function clearChatHistory() {
+                while ($messageHistory.lastChild) {
+                    $messageHistory.lastChild.remove();
+                }
+            }
+            function clearChatParticipants() {
+                while ($messagingParticipants.lastChild) {
+                    $messagingParticipants.lastChild.remove();
+                }
+            }
+            function updateChatPeers() {
+                clearChatParticipants();
+
+                for (let property in chatSession.peerTokens) {
+
+                    let peer = chatSession.peerTokens[property];
+                    let displayName = (peer.DisplayName == '') ? `[${peer.SocketId}]` : peer.DisplayName;
+                    let $peer = document.createElement('li');
+                    $peer.classList.add('peer');
+                    if (peer == chatSession.HostToken) {
+                        $peer.classList.add('host');
+                    }
+                    $peer.textContent = displayName;
+                    $messagingParticipants.appendChild($peer);
+                }
+            }
+            function addChatMessage(messageData) {
+                let content;
+                if (Object.prototype.toString.call(messageData) === '[object String]') {
+                    content = `${messageData}`;
+                }
+                else {
+                    let peer = (messageData.SenderId == chatSession.token.SocketId) ? chatSession.token : chatSession.peerTokens[messageData.SenderId];
+                    if (peer == null) {
+                        console.error('Unknown Participant. Socket ID: ' + messageData.SenderId);
+                        return;
+                    }
+                    content = `<header>
+                                            <img class="icon" src="${peer.IconUrl || ''}" />
+                                            <span class="name">${peer.DisplayName || ''}</span>
+                                        </header>
+                                        <div>${messageData.Message}</div>`;
+                }
+
+                let $message = document.createElement('li');
+                $message.classList.add('message');
+                $message.innerHTML = content;
+
+                $messageHistory.appendChild($message);
+                return $message;
+            }
+
+            function chatSession_OnGreeting(event) {
+                $chatSessionKey.value = event.detail.SessionKey;
+                updateChatPeers();
+            }
+            function chatSession_OnPeers(event) {
+                updateChatPeers();
+
+                // show messages
+                let updates = event.detail;
+                for (let i = 0; i < updates.length; i++) {
+                    let update = updates[i];
+                    for (let j = 0; j < update.Peers.length; j++) {
+                        let peer = update.Peers[j];
+                        let displayName = (peer.DisplayName == '') ? `[${peer.SocketId}]` : peer.DisplayName;
+                        let isHost = peer.SocketId == chatSession.hostToken.SocketId;
+                        if (update.Status == 'connect' && isHost == false) {
+                            let content = `<div>${displayName} has joined the chat.</div>`;
+                            let $joinMessage = addChatMessage(content);
+                            $joinMessage.classList.add('status');
+                        }
+                        else if (update.Status == 'disconnect') {
+                            let action = (isHost == true) ? 'ended' : 'left';
+                            let content = `<div>${displayName} has ${action} the chat.</div>`;
+                            let $leaveMessage = addChatMessage(content);
+                            $leaveMessage.classList.add('status');
+                        }
+                    }
+                }
+            }
+            function chatSession_OnStatusUpdates(event) {
+                addChatMessage(event.detail);
+            }
+            function chatSession_OnMessage(event) {
+                addChatMessage(event.detail);
+            }
+            function chatSession_OnClose(event) {
+                if (chatSession.ending == true) {
+                    let action = (chatSession.token.SocketId == chatSession.hostToken.SocketId) ? 'ended' : 'left';
+                    addChatMessage(`[You have ${action} the chat session.]`);
+                }
+                else {
+                    addChatMessage('[The chat session has been ended.]')
+                }
+                chatSession = null;
+            }
+
+            //async function joinChat_onClick(event) {
+            //    if (chatSocket != null) {
+            //        console.error('Session is already active.');
+            //        return;
+            //    }
+
+            //    try {
+            //        let sessionKey = $chatSessionKey.value;
+            //        console.log(sessionKey);
+
+            //        chatSocket = new WebSocket(`wss://${apiDomain}:5001/video/${sessionKey}`);
+
+            //        chatSocket.onopen = function (e) {
+            //            console.log("[open] Connection established");
+            //        };
+
+            //        chatSocket.onmessage = function (event) {
+            //            console.log(`[message] Data received from server: ${event.data}`);
+            //            let data = JSON.parse(event.data);
+
+            //            if (data.MessageType == 1) {
+            //                let value = JSON.parse(data.Message);
+            //                console.log(value);
+            //                initChat(value);
+            //            }
+            //            else if (data.MessageType == 3) {
+            //                let value = JSON.parse(data.Message);
+            //                console.log(value);
+            //                updateParticipant(value);
+            //                updateParticipants();
+            //            }
+            //            else if (data.MessageType == 5) {
+            //                let value = JSON.parse(data.Message);
+            //                console.log(value);
+            //                addChatUpdate(value.status, value.peer);
+            //            }
+            //            else if (data.MessageType == 8) {
+            //                addChatMessage(data);
+            //            }
+            //            console.log(data);
+            //        };
+
+            //        chatSocket.onclose = function (event) {
+            //            if (event.wasClean) {
+            //                console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
+            //            } else {
+            //                // e.g. server process killed or network down
+            //                // event.code is usually 1006 in this case
+            //                console.log('[close] Connection died');
+            //            }
+            //            chatSocket = null;
+            //        };
+
+            //        chatSocket.onerror = function (error) {
+            //            console.log(`[error] ${error.message}`);
+            //        };
+
+            //        window.addEventListener('beforeunload', () => {
+            //            chatSocket.onclose = function () { }; // disable onclose handler first
+            //            chatSocket.close();
+            //        }, { once: true });
+
+            //    } catch (ex) { console.error(ex); }
+            //}
+
+            //async function sendMessage_onClick(event) {
+            //    if (chatSocket == null) {
+            //        console.error("No session has been started.");
+            //        return;
+            //    }
+
+            //    console.log("Sending to server");
+            //    addChatMessage({ SenderId: participantId, Message: $message.value });
+            //    chatSocket.send(JSON.stringify({ Message: $message.value }));
+            //}
 
             async function getWebcam_onClick(event) {
                 console.log('Requesting local stream');
@@ -252,123 +634,6 @@
 
             }
 
-            function initChat(messageData) {
-                participantId = messageData.SessionToken.SocketId;
-                // add all participants that are already in the session
-                for (let i = 0; i < messageData.Participants.length; i++) {
-                    if (messageData.Participants[i].SocketId == messageData.HostId) {
-                        hostSessionToken = messageData.Participants[i];
-                    }
-                    updateParticipant(messageData.Participants[i], messageData.HostId, false);
-                }
-                updateParticipants(messageData.Participants);
-
-                makeIntroduction(messageData.SessionToken);
-            }
-
-            function makeIntroduction(token) {
-                token.DisplayName = $chatDisplayName.value;
-                token.IconUrl = '';
-
-                console.log("Sending Introduction: ", token);
-                let message = JSON.stringify(token);
-                chatSocket.send(JSON.stringify({ Type: 2, SenderId: token.SocketId, Message: message }));
-            }
-
-            function updateParticipant(token, hostId, reportUpdate = true) {
-                let dirtyToken = null;
-                if (chatParticipants[token.SocketId] != null) {
-                    dirtyToken = Object.assign({ initialized: false }, chatParticipants[token.SocketId]);
-                }
-
-                chatParticipants[token.SocketId] = token;
-
-                if (reportUpdate === true) {
-                    let displayName = (token.DisplayName == '') ? token.SocketId : token.DisplayName;
-                    let $message = document.createElement('li');
-                    $message.classList.add('message', 'status');
-
-                    if (dirtyToken != null) {
-
-                        let dirtyTokenDisplayName = (dirtyToken.DisplayName == '') ? dirtyToken.SocketId : dirtyToken.DisplayName;
-                        if (dirtyToken.initialized != null) {
-                            $message.innerHTML = `<div>${displayName} has joined the chat.</div>`;
-                            delete dirtyToken.initialized;
-                        }
-                        else if (dirtyTokenDisplayName != displayName) {
-                            $message.innerHTML = `<div>${displayName} has updated their Display Name <em>[Formerly: ${dirtyTokenDisplayName}].</div>`;
-                        }
-                    }
-                    else {
-                        if (hostSessionToken.SocketId == token.SocketId) {
-                            $message.innerHTML = `<div>Host ${displayName} has started the chat.</div>`;
-                        }
-                        else {
-                            chatParticipants[hostId] = hostSessionToken;
-                            $message.innerHTML = `<div>${displayName} has joined the chat.</div>`;
-                        }
-
-                    }
-
-                    $messageHistory.appendChild($message);
-
-                    if (hostSessionToken.SocketId == participantId) {
-                        chatSocket.send(JSON.stringify({ Type: 3, SenderId: participantId, Message: JSON.stringify(token) }))
-                    }
-                }
-            }
-            function updateParticipants() {
-                while ($messagingParticipants.lastChild) {
-                    $messagingParticipants.lastChild.remove();
-                }
-
-                for (let property in chatParticipants) {
-
-                    let participant = chatParticipants[property];
-                    let displayName = (participant.DisplayName == '') ? `[${participant.SocketId}]` : participant.DisplayName;
-                    let $participant = document.createElement('li');
-                    $participant.classList.add('participant');
-                    $participant.textContent = displayName;
-                    $messagingParticipants.appendChild($participant);
-                }
-            }
-            function addChatUpdate(status, messageData) {
-                let action = (status == 'connect') ? 'joined' : 'left';
-                let displayName = (messageData.DisplayName == '') ? `[${messageData.SocketId}]` : messageData.DisplayName;
-                let $message = document.createElement('li');
-                $message.classList.add('message', 'status');
-                $message.innerHTML = `<div>${displayName} has ${action} the chat.</div>`;
-
-                $messageHistory.appendChild($message);
-
-                if (status == 'connect') {
-                    chatParticipants[messageData.SocketId] = messageData;
-                }
-                else if (status == 'disconnect') {
-                    let participant = chatParticipants[messageData.SocketId];
-                    if (participant != null) {
-                        delete chatParticipants[messageData.SocketId];
-                    }
-                }
-
-                updateParticipants(chatParticipants);
-            }
-            function addChatMessage(messageData) {
-                let participant = chatParticipants[messageData.SenderId];
-                if (participant == null) {
-                    console.error('Unknown Participant. Socket ID: ' + messageData.SenderId);
-                    return;
-                }
-                let $message = document.createElement('li');
-                $message.classList.add('message');
-                $message.innerHTML = `<header>
-                    <img class="icon" src="${participant.IconUrl || ''}" />
-                    <span class="name">${participant.DisplayName || ''}</span>
-                </header>
-                <div>${messageData.Message}</div>`;
-
-                $messageHistory.appendChild($message);
-            }
 
             async function videoChat_OnRemoteStream(event) {
                 if (remoteVideo.srcObject !== event.streams[0]) {
@@ -387,6 +652,7 @@
             var $chatDisplayName = document.getElementById('chat-display-name');
             var $chatSessionKey = document.getElementById('chat-session-key');
             var $joinChat = document.getElementById('join-chat');
+            var $leaveChat = document.getElementById('leave-chat');
             var $messagingParticipants = document.getElementById('messaging-participants');
             var $messageHistory = document.getElementById('message-history');
             var $message = document.getElementById('message');
@@ -394,6 +660,7 @@
 
 
             $joinChat.addEventListener('click', joinChat_onClick);
+            $leaveChat.addEventListener('click', leaveChat_onClick);
             $sendMessageButton.addEventListener('click', sendMessage_onClick);
 
             $getWebcamButton.addEventListener('click', getWebcam_onClick);

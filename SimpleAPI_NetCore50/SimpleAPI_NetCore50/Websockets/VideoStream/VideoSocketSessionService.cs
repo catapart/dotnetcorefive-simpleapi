@@ -40,17 +40,17 @@ namespace SimpleAPI_NetCore50.Websockets
             }
             else
             {
-                // alert host that someone has connected
                 hostId = targetSession.GetAttributeValue<string>("hostId");
             }
 
-            // alert requester session token and current participants
-            Models.SocketToken[] participants = targetSession.GetSockets().Select(pair => pair.Value.Token).ToArray();
+            // alert requester of their own token, the hosts token and other existing peers
+            Models.SocketToken hostToken = targetSession.GetSocketById(hostId).Token;
+            Models.SocketToken[] participants = targetSession.GetSockets().Where(pair => pair.Value.Token.SocketId != sessionSocket.Token.SocketId ).Select(pair => pair.Value.Token).ToArray();
 
             SocketSessionMessageResponse response = new SocketSessionMessageResponse()
             {
-                MessageType = SocketSessionMessageType.Property,
-                Message = System.Text.Json.JsonSerializer.Serialize(new { HostId = hostId, SessionToken = sessionSocket.Token, Participants = participants })
+                MessageType = SocketSessionMessageType.Greeting,
+                Message = System.Text.Json.JsonSerializer.Serialize(new { SessionKey = sessionKey, HostToken = hostToken, Token = sessionSocket.Token, Peers = participants })
             };
             SendMessage(sessionSocket, response);
 
@@ -75,23 +75,22 @@ namespace SimpleAPI_NetCore50.Websockets
                 string displayName = sessionSocket.Token.DisplayName;
 
                 string message = "";
-                switch(messageRequest.Type)
+                switch (messageRequest.Type)
                 {
                     case SocketSessionMessageType.Introduction:
+                        string hostId = socketSession.GetAttributeValue<string>("hostId");
                         Models.SocketToken token = System.Text.Json.JsonSerializer.Deserialize<Models.SocketToken>(messageRequest.Message);
                         sessionSocket.Token.DisplayName = token.DisplayName;
                         sessionSocket.Token.IconUrl = token.IconUrl;
 
-                        string hostId = socketSession.GetAttributeValue<string>("hostId");
                         SocketSessionMessageResponse hostAlertResponse = new SocketSessionMessageResponse()
                         {
-                            MessageType = SocketSessionMessageType.Participant,
-                            Message = System.Text.Json.JsonSerializer.Serialize(sessionSocket.Token)
+                            MessageType = SocketSessionMessageType.StatusUpdates,
+                            Message = System.Text.Json.JsonSerializer.Serialize(new object[] { new { Status = "connect", Peers = new Models.SocketToken[1] { sessionSocket.Token } } })
                         };
                         SendMessage(sessionKey, hostId, hostAlertResponse);
                         return;
-                    case SocketSessionMessageType.Participant:
-                    case SocketSessionMessageType.StatusUpdate:
+                    case SocketSessionMessageType.StatusUpdates:
                     case SocketSessionMessageType.Text:
                         message = messageRequest.Message;
                         break;
