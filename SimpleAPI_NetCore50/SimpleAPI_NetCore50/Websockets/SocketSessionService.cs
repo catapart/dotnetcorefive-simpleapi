@@ -153,7 +153,7 @@ namespace SimpleAPI_NetCore50.Websockets
 
             foreach (var pair in socketSession.GetSockets())
             {
-                if (!socketIds.Contains(pair.Key) && pair.Value.Socket.State == WebSocketState.Open)
+                if (socketIds.Contains(pair.Key) && pair.Value.Socket.State == WebSocketState.Open)
                 {
                     await SendMessage(pair.Value.Socket, message);
                 }
@@ -175,7 +175,7 @@ namespace SimpleAPI_NetCore50.Websockets
 
             foreach (var pair in socketSession.GetSockets())
             {
-                if (!sockets.Contains(pair.Value.Socket) && pair.Value.Socket.State == WebSocketState.Open)
+                if (sockets.Contains(pair.Value.Socket) && pair.Value.Socket.State == WebSocketState.Open)
                 {
                     tasks.Add(SendMessage(pair.Value.Socket, message));
                 }
@@ -200,7 +200,7 @@ namespace SimpleAPI_NetCore50.Websockets
 
                 foreach (var pair in socketSession.GetSockets())
                 {
-                    if (!socketIds.Contains(pair.Key) && pair.Value.Socket.State == WebSocketState.Open)
+                    if (socketIds.Contains(pair.Key) && pair.Value.Socket.State == WebSocketState.Open)
                     {
                         tasks.Add(SendMessage(pair.Value.Socket, message));
                     }
@@ -227,7 +227,7 @@ namespace SimpleAPI_NetCore50.Websockets
 
                 foreach (var pair in socketSession.GetSockets())
                 {
-                    if (!sockets.Contains(pair.Value.Socket) && pair.Value.Socket.State == WebSocketState.Open)
+                    if (sockets.Contains(pair.Value.Socket) && pair.Value.Socket.State == WebSocketState.Open)
                     {
                         tasks.Add(SendMessage(pair.Value.Socket, message));
                     }

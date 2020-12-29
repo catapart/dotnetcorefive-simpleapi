@@ -44,6 +44,7 @@ namespace SimpleAPI_NetCore50.Websockets
             WebSocket socket = await context.WebSockets.AcceptWebSocketAsync();
 
             SessionSocket sessionSocket = targetSession.AddWebSocket(socket);
+            targetSession.SetAttribute("hostId", sessionSocket.Token.SocketId);
 
             return sessionSocket;
         }
@@ -70,7 +71,23 @@ namespace SimpleAPI_NetCore50.Websockets
                 StepID = stepId
             };
 
-            await SendMessageToAll(sessionKey, response);
+            Schemas.SocketSessionUpdate[] updates = new Schemas.SocketSessionUpdate[]
+            {
+                new Schemas.SocketSessionUpdate()
+                {
+                    Status = "progress",
+                    Progress = response
+                }
+            };
+
+            SocketSession socketSession = GetSessionByKey(sessionKey);
+            string hostId = socketSession.GetAttributeValue<string>("hostId");
+            Schemas.SocketSessionMessageResponse updateResponse = new Schemas.SocketSessionMessageResponse()
+            {
+                MessageType = Schemas.SocketSessionMessageType.StatusUpdates,
+                Message = System.Text.Json.JsonSerializer.Serialize(updates)
+            };
+            SendMessage(sessionKey, hostId, updateResponse);
         }
     }
 }

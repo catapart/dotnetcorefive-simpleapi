@@ -48,24 +48,58 @@
             <button id="send-message" type="button">Send</button>
         </div>
     </div>
-    <div class="card">
-        <video width="1280" height="720" id="client-webcam"></video>
-        <ul class="remote-webcams"></ul>
+    <div class="card video-chat">
+    </div>
+    <template id="video-chat-ui">
+        <div>
+            <h4>Peers</h4>
+            <ul id="video-peers"></ul>
+        </div>
+        <div class="display">
+            <ul class="videos">
+                <li class="video peer host">
+                    <video width="800" height="450" id="client-webcam" autoplay></video>
+                </li>
+            </ul>
+            <ul id="toasts"></ul>
+        </div>
         <div>
             <button id="get-webcam-feed" type="button">Get Webcam Feed</button>
-            <button id="start-video-chat" type="button">Start Stream</button>
-            <button id="end-video-chat" type="button">End Stream</button>
+            <span>
+                <span class="title">Display Name:</span>
+                <input id="video-display-name" type="text" value="Host" />
+            </span>
         </div>
-    </div>
+        <div>
+            <button id="start-video-chat" type="button">Start Session</button>
+            <button id="end-video-chat" type="button">End Session</button>
+            <div>
+                <span class="title">Session Key:</span>
+                <input id="host-session-key" type="text" placeholder="Start a video chat session to generate a key." disabled />
+            </div>
+        </div>
+        <div>
+            <button id="join-video-chat" type="button">Join</button>
+            <button id="leave-video-chat" type="button">Leave</button>
+            <div>
+                <span class="title">Session Key:</span>
+                <input id="guest-session-key" type="text" />
+            </div>
+        </div>
+    </template>
     <script>
-        var apiDomain = '192.168.254.12';
+        var apiDomain = new URL(window.location).host;
         var chatSession = null;
         var videoSignalingSession = null;
+        var progressSession = null;
 
-        var signalingSocket = null;
+        var isHost = false;
         var localStream = null;
+        var localPeerOffer = null;
         var localPeerConnection = null;
-        var remotePeerConnections = [];
+        var localPeerDescriptionSet = false;
+        var remotePeerConnections = {};
+        var lobbyPeerConnections = {};
 
         const socketMessageTypeMap =
             [
@@ -84,7 +118,7 @@
             ];
         class WebsocketSession {
             constructor() {
-                this.domain = '192.168.254.12';
+                this.domain = new URL(window.location).host;
 
                 this.socket = null;
                 this.token = null;
@@ -92,6 +126,7 @@
                 this.peerTokens = {};
                 this.offer = null;
 
+                // easy event forwarding
                 let node = document.createTextNode(null);
                 this.addEventListener = node.addEventListener.bind(node);
                 this.removeEventListener = node.removeEventListener.bind(node);
@@ -101,15 +136,15 @@
             async host(displayName, iconUrl, handlers) {
 
 
-                let response = await fetch(`https://${this.domain}:5001/api/websocket/stream`);
+                let response = await fetch(`https://${this.domain}/api/websocket/stream`);
                 let sessionKey = await response.text();
                 console.log("Established new websocket session: ", sessionKey);
-                let url = `wss://${this.domain}:5001/video/${sessionKey}`;
+                let url = `wss://${this.domain}/video/${sessionKey}`;
 
                 return this.connect(url, displayName, iconUrl, handlers);
             }
             async join(sessionKey, displayName, iconUrl, handlers) {
-                let url = `wss://${this.domain}:5001/video/${sessionKey}`;
+                let url = `wss://${this.domain}/video/${sessionKey}`;
                 return this.connect(url, displayName, iconUrl, handlers);
             }
 
@@ -318,77 +353,532 @@
             }
         }
 
+        class VideoPeer {
+            constructor() {
+                this.peerConnection = null;
+                this.token = null;
+                this.$peer = null;
+                this.stream = null;
+            }
+
+            addConnection(chat, id, configuration) {
+
+                console.log('RTCPeerConnection configuration:', configuration);
+                this.peerConnection = new RTCPeerConnection(configuration);
+                this.peerConnection.addEventListener('track', chat.peerConnection_onTrack.bind(chat));
+                //this.peerConnection.addEventListener('connectionstatechange', chat.peerConnection_onConnectionStateChange.bind(this));
+                console.log('Created peer connection object peerConnection');
+                this.peerConnection.addEventListener('icecandidate', (event) => {
+                    if (event.candidate != null) {
+                        //this.peerConnection.addIceCandidate(event.candidate);
+                        chat.sendValue({ type: 'candidate', candidate: event.candidate }, null, id);
+                    }
+                });
+                this.peerConnection.addEventListener('iceconnectionstatechange', (event) => {
+                    console.log('ICE state change event: ', event);
+                });
+
+                // add local stream tracks to peer connection
+                chat.localStream.getTracks().forEach(track => this.peerConnection.addTrack(track, chat.localStream));
+                console.log('Added local stream to peerConnection');
+            }
+
+            setStream() {
+                if (this.$peer == null) {
+                    return;
+                }
+
+                this.$peer.$video.srcObject = this.stream;
+                this.$peer.$video.play();
+            }
+        }
+        class VideoChat {
+            constructor($parentNode) {
+                this.$parentNode = $parentNode;
+                if (this.$parentNode == null || !(this.$parentNode instanceof HTMLElement)) {
+                    throw new Error('$parentNode must be an instance of the HTMLElement type.')
+                }
+
+                this.configuration = {};
+                this.chatSession = null;
+                this.localStream = null;
+                this.videoPeers = {};
+                // this.rooms = []; // [enhancement]: implement multiple rooms, instead of just one well-known chatroom.
+
+                // easy event forwarding
+                let node = document.createTextNode(null);
+                this.addEventListener = node.addEventListener.bind(node);
+                this.removeEventListener = node.removeEventListener.bind(node);
+                this.dispatchEvent = node.dispatchEvent.bind(node);
+
+                // create interface
+                this._createInterface();
+
+                // state informtaion
+                this.isHost = false;
+                this._skippedIntro = false;// internal helper
+                this._peerDescriptionIsSet = false;
+            }
+            _createInterface() {
+
+                let template = document.getElementById('video-chat-ui');
+                let templateContent = template.content;
+                this.$parentNode.appendChild(templateContent.cloneNode(true));
+
+                this.$videoPeers = document.getElementById('video-peers');
+                this.$clientWebcam = document.getElementById('client-webcam');
+                this.$videos = document.querySelector('.card.video-chat .videos');
+                this.$videoToasts = document.getElementById('toasts');
+                this.$videoDisplayName = document.getElementById('video-display-name');
+                this.$getWebcamButton = document.getElementById('get-webcam-feed');
+                this.$startVideoChatButton = document.getElementById('start-video-chat');
+                this.$endVideoChatButton = document.getElementById('end-video-chat');
+                this.$joinVideoChatButton = document.getElementById('join-video-chat');
+                this.$leaveVideoChatButton = document.getElementById('leave-video-chat');
+                this.$hostSessionKey = document.getElementById('host-session-key');
+                this.$guestSessionKey = document.getElementById('guest-session-key');
+
+                this.$getWebcamButton.addEventListener('click', this.getWebcam_onClick.bind(this));
+                this.$startVideoChatButton.addEventListener('click', this.startVideoChat_onClick.bind(this));
+                this.$endVideoChatButton.addEventListener('click', this.endVideoChat_onClick.bind(this));
+                this.$joinVideoChatButton.addEventListener('click', this.joinVideoChat_onClick.bind(this));
+                this.$leaveVideoChatButton.addEventListener('click', this.leaveVideoChat_onClick.bind(this));
+            }
+
+            // handlers
+            chatSession_OnGreeting(event) {
+                this.updateChatPeers();
+                if (this.isHost == true) {
+                    this.$hostSessionKey.value = event.detail.SessionKey;
+                }
+                else {
+                    // send room request
+                }
+            }
+            async chatSession_OnPeers(event) {
+
+                let updates = event.detail;
+                for (let i = 0; i < updates.length; i++) {
+                    let update = updates[i];
+
+                    for (let j = 0; j < update.Peers.length; j++) {
+                        let peer = update.Peers[j];
+                        let displayName = (peer.DisplayName == '') ? `[${peer.SocketId}]` : peer.DisplayName;
+                        let peerIsHost = peer.SocketId == this.chatSession.hostToken.SocketId;
+                        if (update.Status == 'connect') {
+
+                            // create peer connection
+                            let videoPeer = this.addPeer(peer.SocketId);
+                            videoPeer.addConnection(this, peer.SocketId, this.configuration);
+
+                            try {
+                                // create offer
+                                const offerOptions = {
+                                    offerToReceiveAudio: 1,
+                                    offerToReceiveVideo: 1
+                                };
+
+                                console.log('localPeerConnection createOffer start');
+                                let offer = await videoPeer.peerConnection.createOffer(offerOptions);
+                                //console.log(`Offer from peerConnection\n${this.peerOffer.sdp}`);
+
+                                // set description
+                                console.log('peerConnection setLocalDescription start');
+                                try {
+                                    await videoPeer.peerConnection.setLocalDescription(offer);
+                                    console.log(`setLocalDescription complete`);
+                                } catch (error) {
+                                    console.log(`Failed to set session description: ${error.toString()}`);
+                                }
+
+                                // send offer to peer
+                                let offerMessage = { type: 'offer', offer: offer };
+                                this.sendValue(offerMessage, null, message.SenderId);
+                            } catch (error) {
+                                console.log(`Failed to create offer: ${error.toString()}`);
+                            }
+                        }
+                        else if (update.Status == 'disconnect') {
+                            let action = (peerIsHost == true) ? 'ended' : 'left';
+                            let content = `<div>${displayName} has ${action} the chat.</div>`;
+                            let $leaveMessage = this.showChatMessage(content);
+                            $leaveMessage.classList.add('status');
+                        }
+                    }
+                }
+
+                this.updateChatPeers();
+            }
+            async chatSession_OnMessage(event) {
+
+                console.log(event);
+
+                let message = event.detail;
+                let data = JSON.parse(message.Message);
+                if (message.SenderId != this.chatSession.token.SocketId) {
+                    if (data.type == 'candidate') {
+                        try {
+                            let videoPeer = this.getPeer(message.SenderId);
+                            if (videoPeer != null) {
+                                videoPeer.peerConnection.addIceCandidate(data.candidate);
+                            }
+                        } catch (error) {
+                            console.log(`Failed to add ice candidate: ${error.toString()}`);
+                        }
+                    }
+                    else if (data.type == 'offer') {
+
+                        let videoPeer = this.getPeer(message.SenderId);
+                        if (videoPeer == null) {
+                            videoPeer = this.addPeer(message.SenderId);
+                            videoPeer.addConnection(this, message.SenderId, data.configuration);
+                        }
+
+                        try {
+                            console.log('setRemoteDescription start');
+                            await videoPeer.peerConnection.setRemoteDescription(data.offer);
+                            console.log(`setRemoteDescription complete`);
+
+                        } catch (error) {
+                            console.log(`Failed to set remote session description: ${error.toString()}`);
+                        }
+
+                        // create answer
+                        console.log('createAnswer start');
+                        try {
+                            const answer = await videoPeer.peerConnection.createAnswer();
+                            console.log('answer created');
+
+                            videoPeer.peerConnection.setLocalDescription(answer);
+                            videoPeer.$peer = this.createPeerElement(videoPeer.peerConnection);
+                            this.$videos.appendChild(videoPeer.$peer);
+                            videoPeer.setStream();
+
+                            let answerMessage = { type: 'answer', answer: answer };
+                            this.sendValue(answerMessage);
+
+                            let content = `<div>${this.chatSession.peerTokens[message.SenderId].DisplayName} has joined the chat.</div>`;
+                            let $joinMessage = this.showChatMessage(content);
+                            $joinMessage.classList.add('status');
+
+                        } catch (error) {
+                            console.error(error);
+                        }
+                    }
+                    else if (data.type == 'answer') {
+                        try {
+                            let videoPeer = this.getPeer(message.SenderId);
+                            if (videoPeer != null) {
+                                console.log('setRemoteDescription start');
+                                await videoPeer.peerConnection.setRemoteDescription(data.answer);
+                                console.log(`setRemoteDescription complete`);
+
+                                videoPeer.$peer = this.createPeerElement(videoPeer.peerConnection);
+                                this.$videos.appendChild(videoPeer.$peer);
+                                videoPeer.setStream();
+                            }
+                        } catch (error) {
+                            console.log(`Failed to set remote session description: ${error.toString()}`);
+                        }
+                    }
+                }
+            }
+            chatSession_OnStatusUpdates(event) {
+                if (localPeerDescriptionSet == true && event.detail.Status == 'introduction') {
+                    console.log("Sending to server");
+                    // send offer through signaling channel
+                    //chatSession.send(JSON.stringify({ Message: localPeerOffer }));
+                }
+            }
+            chatSession_OnClose(event) {
+                if (this.chatSession.ending == true) {
+                    let action = (this.chatSession.token.SocketId == this.chatSession.hostToken.SocketId) ? 'ended' : 'left';
+                    this.showChatMessage(`[You have ${action} the chat session.]`);
+                }
+                else {
+                    this.showChatMessage('[The chat session has been ended.]')
+                }
+                this.chatSession = null;
+            }
+
+            async getWebcam_onClick(event) {
+                console.log('Requesting local stream');
+                this.$getWebcamButton.disabled = true;
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: 1280, height: 720 } });
+                    console.log('Received local stream');
+                    this.$clientWebcam.srcObject = stream;
+                    this.localStream = stream;
+                    this.$getWebcamButton.disabled = false;
+                }
+                catch (exception) {
+                    console.error(`getUserMedia() error: ${exception.name}`);
+                }
+            }
+
+            async startVideoChat_onClick(event) {
+                this.host();
+            }
+            async endVideoChat_onClick(event) {
+                if (this.isHost == false) {
+                    return;
+                }
+            }
+
+            async joinVideoChat_onClick(event) {
+                this.join(this.$guestSessionKey.value);
+            }
+            async leaveVideoChat_onClick(event) {
+
+            }
+
+            peerConnection_onTrack(event) {
+                //console.log(event.currentTarget);
+                let videoPeer;
+                for (let property in this.videoPeers) {
+                    if (this.videoPeers.hasOwnProperty(property)) {
+                        if (this.videoPeers[property].peerConnection == event.currentTarget) {
+                            videoPeer = this.videoPeers[property];
+                        }
+                    }
+                }
+                videoPeer.stream = event.streams[0];
+                event.track.onunmute = () => {
+                    console.log('track unmuted');
+                    videoPeer.setStream();
+                }
+            }
+            peerConnection_onConnectionStateChange(event) {
+                console.log("[STATE]", event);
+            }
+
+            // functionality
+            async host() {
+                if (this.localStream == null) {
+                    console.error("Cannot create a video chat without source media stream.");
+                    return;
+                }
+
+                if (this.chatSession != null) {
+                    console.error('Session is already active. End the session before starting a new one.');
+                    return;
+                }
+
+                // set UI state
+                this.$clientWebcam.disabled = true;
+                this.$endVideoChatButton.disabled = false;
+                this.resetChat();
+
+                // get signaling session
+                this.chatSession = new WebsocketSession();
+                this.chatSession.addEventListener('greeting', this.chatSession_OnGreeting.bind(this));
+                this.chatSession.addEventListener('peers', this.chatSession_OnPeers.bind(this));
+                this.chatSession.addEventListener('message', this.chatSession_OnMessage.bind(this));
+                this.chatSession.addEventListener('statusupdates', this.chatSession_OnStatusUpdates.bind(this));
+                this.chatSession.addEventListener('close', this.chatSession_OnClose.bind(this));
+                await this.chatSession.host(this.$videoDisplayName.value);
+                this.isHost = true;
+            }
+            async join(sessionKey) {
+                if (this.localStream == null) {
+                    console.error("Cannot create a video chat without source media stream.");
+                    return;
+                }
+
+                if (this.chatSession != null) {
+                    console.error('Session is already active. End the session before starting a new one.');
+                    return;
+                }
+
+                // set UI state
+                this.$clientWebcam.disabled = true;
+                this.$endVideoChatButton.disabled = false;
+                this.resetChat();
+
+                // get signaling session
+                this.chatSession = new WebsocketSession();
+                this.chatSession.addEventListener('greeting', this.chatSession_OnGreeting.bind(this));
+                this.chatSession.addEventListener('peers', this.chatSession_OnPeers.bind(this));
+                this.chatSession.addEventListener('message', this.chatSession_OnMessage.bind(this));
+                this.chatSession.addEventListener('statusupdates', this.chatSession_OnStatusUpdates.bind(this));
+                this.chatSession.addEventListener('close', this.chatSession_OnClose.bind(this));
+                await this.chatSession.join(sessionKey, this.$videoDisplayName.value);
+            }
+
+            sendValue(value, type, recipients) {
+                this.sendMessage(JSON.stringify(value), type, recipients);
+            }
+            sendMessage(message, type, recipients) {
+                type = type || 8;
+                if (recipients != null) {
+                    if (!Array.isArray(recipients)) {
+                        recipients = [recipients];
+                    }
+                }
+                this.chatSession.send(JSON.stringify({ Type: type, SenderId: this.token, Message: message, Recipients: recipients }))
+            }
+
+            resetChat() {
+                this.clearChatHistory();
+                this.clearChatParticipants();
+            }
+            clearChatHistory() {
+                while (this.$videoToasts.lastChild) {
+                    this.$videoToasts.lastChild.remove();
+                }
+            }
+            clearChatParticipants() {
+                while (this.$videoPeers.lastChild) {
+                    this.$videoPeers.lastChild.remove();
+                }
+            }
+            updateChatPeers() {
+                this.clearChatParticipants();
+
+                for (let property in this.chatSession.peerTokens) {
+
+                    let peer = this.chatSession.peerTokens[property];
+                    let displayName = (peer.DisplayName == '') ? `[${peer.SocketId}]` : peer.DisplayName;
+                    let $peer = document.createElement('li');
+                    $peer.classList.add('peer');
+                    if (peer == this.chatSession.HostToken) {
+                        $peer.classList.add('host');
+                    }
+                    $peer.textContent = displayName;
+                    this.$videoPeers.appendChild($peer);
+                }
+            }
+            showChatMessage(messageData) {
+                let content;
+                if (Object.prototype.toString.call(messageData) === '[object String]') {
+                    content = `${messageData}`;
+                }
+                else {
+                    let peer = (messageData.SenderId == this.chatSession.token.SocketId) ? this.chatSession.token : this.chatSession.peerTokens[messageData.SenderId];
+                    if (peer == null) {
+                        console.error('Unknown Participant. Socket ID: ' + messageData.SenderId);
+                        return;
+                    }
+                    content = `<header>
+                                                        <img class="icon" src="${peer.IconUrl || ''}" />
+                                                        <span class="name">${peer.DisplayName || ''}</span>
+                                                    </header>
+                                                    <div>${messageData.Message}</div>`;
+                }
+
+                let $message = document.createElement('li');
+                $message.classList.add('toast');
+                $message.innerHTML = content;
+
+                this.$videoToasts.appendChild($message);
+                return $message;
+            }
+
+            addPeer(id) {
+                let videoPeer = new VideoPeer();
+                videoPeer.token = this.chatSession.peerTokens[id];
+                this.videoPeers[id] = videoPeer;
+
+                return videoPeer;
+            }
+            getPeer(socketId) {
+                for (let property in this.videoPeers) {
+                    if (this.videoPeers.hasOwnProperty(property)) {
+                        if (property == socketId) {
+                            return this.videoPeers[property];
+                        }
+                    }
+                }
+                return null;
+            }
+            createPeerElement(peerConnection) {
+                let $peer = document.createElement('li');
+                $peer.classList.add('peer');
+                $peer.innerHTML = `<video width="800" height="450"></video>`
+                $peer.$video = $peer.querySelector('video');
+                $peer.$video.autoplay = true;
+                $peer.peerConnection = peerConnection;
+                return $peer;
+            }
+            getPeerElement(peerConnection) {
+                let $peer = null;
+                let $elements = this.$videos.querySelectorAll('.peer');
+                [].map.call($elements, ($element) => {
+                    if ($element.peerConnection == peerConnection) {
+                        $peer = $element;
+                    }
+                });
+                return $peer;
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
 
+            // file upload
             async function websocketTest_onClick(event) {
                 let totalBytes = $form['uploadfile'].files[0].size;
                 $progressTotal.textContent = totalBytes;
 
-                const response = await fetch(`https://${apiDomain}:5001/api/websocket/progress/${totalBytes}`);
-                try {
-                    let sessionKey = await response.text();
-                    console.log(sessionKey);
+                if (progressSession != null) {
+                    console.error('Session is already active. End the session before starting a new one.');
+                    return;
+                }
 
-                    let socket = new WebSocket(`wss://${apiDomain}:5001/progress/${sessionKey}`);
+                clearProgressReport();
 
-                    socket.onopen = function (e) {
-                        console.log("[open] Connection established");
-                        console.log("Sending to server");
-                        socket.send("Handshake");
-                    };
+                progressSession = new WebsocketSession();
+                progressSession.addEventListener('statusupdates', progressSession_OnStatusUpdates);
+                progressSession.addEventListener('close', progressSession_OnClose);
 
-                    socket.onmessage = function (event) {
-                        console.log(`[message] Data received from server: ${event.data}`);
-                        let data = JSON.parse(event.data);
-                        console.log(data);
-                        $progressValue.textContent = data.UnitsCompleted;
-                        $progressPercentage.value = (data.UnitsCompleted / data.UnitTotal) * 100;
-                    };
+                let sessionResponse = await fetch(`https://${apiDomain}/api/websocket/progress/${totalBytes}`);
+                let sessionKey = await sessionResponse.text();
+                console.log("Established new websocket session: ", sessionKey);
+                let url = `wss://${apiDomain}/progress/${sessionKey}`;
 
-                    socket.onclose = function (event) {
-                        if (event.wasClean) {
-                            console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
-                        } else {
-                            // e.g. server process killed or network down
-                            // event.code is usually 1006 in this case
-                            console.log('[close] Connection died');
-                        }
-                    };
+                await progressSession.connect(url);
 
-                    socket.onerror = function (error) {
-                        console.log(`[error] ${error.message}`);
-                    };
-
-                    window.addEventListener('beforeunload', () => {
-                        socket.onclose = function () { }; // disable onclose handler first
-                        socket.close();
-                    }, { once: true });
-
-                    let options =
-                    {
-                        method: "POST",
-                        body: new FormData($form)
-                    };
-
-                    const response2 = await fetch(`https://${apiDomain}:5001/api/streaming/progress/${sessionKey}`, options);
-                    if (!response2.ok) {
-                        try {
-                            let result1 = await response2.text();
-                            console.log(result1)
-
-                        } catch (ex) { console.error(ex); }
-                    }
-                    else {
-                        console.log(await response2.json());
-                    }
-
-                } catch (ex) { console.error(ex); }
+                let options =
+                {
+                    method: "POST",
+                    body: new FormData($form)
+                };
+                fetch(`https://${apiDomain}/api/streaming/progress/${sessionKey}`, options);
+            }
+            function progressSession_OnStatusUpdates(event) {
+                for (let i = 0; i < event.detail.length; i++) {
+                    updateProgress(event.detail[i]);
+                }
+            }
+            function progressSession_OnClose(event) {
+                showProgressMessage('[File Upload Complete]');
+                progressSession = null;
             }
 
+            function clearProgressReport() {
+                $progressPercentage.value = 0;
+                showProgressMessage('');
+            }
+            function updateProgress(update) {
+                if (update.Status != 'progress') {
+                    return;
+                }
+                $progressPercentage.value = (update.Progress.UnitsCompleted / update.Progress.UnitTotal) * 100;
+                showProgressMessage(update.Progress.UnitsCompleted);
+            }
+            function showProgressMessage(message) {
+                $progressValue.textContent = message;
+            }
+
+            var $form = document.querySelector('form');
+            var $websocketTest = document.querySelector('.websocket-test');
+            var $progressValue = document.querySelector('span.progress-value');
+            var $progressTotal = document.querySelector('span.progress-total');
+            var $progressPercentage = document.querySelector('progress');
+            $websocketTest.addEventListener('click', websocketTest_onClick);
 
 
 
-
+            // chat
             async function startChat_onClick(event) {
                 if (chatSession != null) {
                     console.error('Session is already active. End the session before starting a new one.');
@@ -405,7 +895,6 @@
                 chatSession.addEventListener('close', chatSession_OnClose);
                 await chatSession.host($chatDisplayName.value);
             }
-
             async function sendMessage_onClick(event) {
                 if (chatSession == null) {
                     console.error("No session has been started.");
@@ -416,7 +905,6 @@
                 addChatMessage({ SenderId: chatSession.token.SocketId, Message: $message.value });
                 chatSession.send(JSON.stringify({ Message: $message.value }));
             }
-
             async function endChat_onClick(event) {
                 if (chatSession == null) {
                     return;
@@ -425,6 +913,48 @@
                 await chatSession.close();
             }
 
+            function chatSession_OnGreeting(event) {
+                $chatSessionKey.value = event.detail.SessionKey;
+                updateChatPeers();
+            }
+            function chatSession_OnPeers(event) {
+                updateChatPeers();
+
+                // show messages
+                let updates = event.detail;
+                for (let i = 0; i < updates.length; i++) {
+                    let update = updates[i];
+                    for (let j = 0; j < update.Peers.length; j++) {
+                        let peer = update.Peers[j];
+                        let displayName = (peer.DisplayName == '') ? `[${peer.SocketId}]` : peer.DisplayName;
+                        let isHost = peer.SocketId == chatSession.hostToken.SocketId;
+                        if (update.Status == 'connect' && isHost == false) {
+                            let content = `<div>${displayName} has joined the chat.</div>`;
+                            let $joinMessage = addChatMessage(content);
+                            $joinMessage.classList.add('status');
+                        }
+                        else if (update.Status == 'disconnect') {
+                            let action = (isHost == true) ? 'ended' : 'left';
+                            let content = `<div>${displayName} has ${action} the chat.</div>`;
+                            let $leaveMessage = addChatMessage(content);
+                            $leaveMessage.classList.add('status');
+                        }
+                    }
+                }
+            }
+            function chatSession_OnMessage(event) {
+                addChatMessage(event.detail);
+            }
+            function chatSession_OnClose(event) {
+                if (chatSession.ending == true) {
+                    let action = (chatSession.token.SocketId == chatSession.hostToken.SocketId) ? 'ended' : 'left';
+                    addChatMessage(`[You have ${action} the chat session.]`);
+                }
+                else {
+                    addChatMessage('[The chat session has been ended.]')
+                }
+                chatSession = null;
+            }
 
             function clearChatHistory() {
                 while ($messageHistory.lastChild) {
@@ -464,10 +994,10 @@
                         return;
                     }
                     content = `<header>
-                                    <img class="icon" src="${peer.IconUrl || ''}" />
-                                    <span class="name">${peer.DisplayName || ''}</span>
-                                </header>
-                                <div>${messageData.Message}</div>`;
+                                                    <img class="icon" src="${peer.IconUrl || ''}" />
+                                                    <span class="name">${peer.DisplayName || ''}</span>
+                                                </header>
+                                                <div>${messageData.Message}</div>`;
                 }
 
                 let $message = document.createElement('li');
@@ -478,323 +1008,7 @@
                 return $message;
             }
 
-            function chatSession_OnGreeting(event) {
-                $chatSessionKey.value = event.detail.SessionKey;
-                updateChatPeers();
-            }
-            function chatSession_OnPeers(event) {
-                updateChatPeers();
-
-                // show messages
-                let updates = event.detail;
-                for (let i = 0; i < updates.length; i++) {
-                    let update = updates[i];
-                    for (let j = 0; j < update.Peers.length; j++) {
-                        let peer = update.Peers[j];
-                        let displayName = (peer.DisplayName == '') ? `[${peer.SocketId}]` : peer.DisplayName;
-                        let isHost = peer.SocketId == chatSession.hostToken.SocketId;
-                        if (update.Status == 'connect' && isHost == false) {
-                            let content = `<div>${displayName} has joined the chat.</div>`;
-                            let $joinMessage = addChatMessage(content);
-                            $joinMessage.classList.add('status');
-                        }
-                        else if (update.Status == 'disconnect') {
-                            let action = (isHost == true) ? 'ended' : 'left';
-                            let content = `<div>${displayName} has ${action} the chat.</div>`;
-                            let $leaveMessage = addChatMessage(content);
-                            $leaveMessage.classList.add('status');
-                        }
-                    }
-                }
-            }
-            function chatSession_OnStatusUpdates(event) {
-                addChatMessage(event.detail);
-            }
-            function chatSession_OnMessage(event) {
-                addChatMessage(event.detail);
-            }
-            function chatSession_OnClose(event) {
-                if (chatSession.ending == true) {
-                    let action = (chatSession.token.SocketId == chatSession.hostToken.SocketId) ? 'ended' : 'left';
-                    addChatMessage(`[You have ${action} the chat session.]`);
-                }
-                else {
-                    addChatMessage('[The chat session has been ended.]')
-                }
-                chatSession = null;
-            }
-
-
-
-
-
-            async function getWebcam_onClick(event) {
-                console.log('Requesting local stream');
-                $getWebcamButton.disabled = true;
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-                    console.log('Received local stream');
-                    $clientWebcam.srcObject = stream;
-                    localStream = stream;
-                    $getWebcamButton.disabled = false;
-                }
-                catch (exception) {
-                    console.error(`getUserMedia() error: ${exception.name}`);
-                }
-            }
-
-            async function startVideoChat_onClick(event) {
-
-                if (localStream == null) {
-                    console.error("Cannot create a video chat without source media stream.");
-                    return;
-                }
-
-                await getSignalingSocket();
-                // collect stream
-                // create offer
-
-                //onmessage
-                // if type == participant
-                //      send offer
-
-
-
-
-                $clientWebcam.disabled = true;
-                $endVideoChatButton.disabled = false;
-                console.log('Starting stream');
-                startTime = window.performance.now();
-                const videoTracks = localStream.getVideoTracks();
-                const audioTracks = localStream.getAudioTracks();
-                if (videoTracks.length > 0) {
-                    console.log(`Using video device: ${videoTracks[0].label}`);
-                }
-                if (audioTracks.length > 0) {
-                    console.log(`Using audio device: ${audioTracks[0].label}`);
-                }
-
-
-                console.log('RTCPeerConnection configuration:', {});
-                localPeerConnection = new RTCPeerConnection({});
-                console.log('Created local peer connection object localPeerConnection');
-                localPeerConnection.addEventListener('icecandidate', e => onIceCandidate(localPeerConnection, e));
-                localPeerConnection.addEventListener('iceconnectionstatechange', e => onIceStateChange(localPeerConnection, e));
-
-                localStream.getTracks().forEach(track => localPeerConnection.addTrack(track, localStream));
-                console.log('Added local stream to localPeerConnection');
-
-                try {
-                    const offerOptions = {
-                        offerToReceiveAudio: 1,
-                        offerToReceiveVideo: 1
-                    };
-
-                    console.log('localPeerConnection createOffer start');
-                    const offer = await localPeerConnection.createOffer(offerOptions);
-                    await onCreateOfferSuccess(offer);
-                } catch (e) {
-                    onCreateSessionDescriptionError(e);
-                }
-
-            }
-
-            async function endVideoChat_onClick(event) {
-
-            }
-
-            async function getSignalingSocket() {
-                if (signalingSocket != null) {
-                    return;
-                }
-
-                let response = await fetch(`https://${apiDomain}:5001/api/websocket/stream`);
-
-                try {
-                    let sessionKey = await response.text();
-                    //$chatSessionKey.value = sessionKey;
-                    console.log("Established new signaling session: ", sessionKey);
-
-                    signalingSocket = new WebSocket(`wss://${apiDomain}:5001/video/${sessionKey}`);
-
-                    signalingSocket.onopen = function (e) {
-                        console.log("[open] Connection established");
-                        console.log(e);
-                    };
-
-                    signalingSocket.onmessage = function (event) {
-                        console.log(`[message] Data received from server: ${event.data}`);
-                        let data = JSON.parse(event.data);
-
-                        if (data.MessageType == 1) {
-                            let value = JSON.parse(data.Message);
-                            console.log(value);
-                            initChat(value);
-                        }
-                        else if (data.MessageType == 3) {
-                            let value = JSON.parse(data.Message);
-                            console.log(value);
-                            updateParticipant(value);
-                            updateParticipants();
-                        }
-                        else if (data.MessageType == 5) {
-                            let value = JSON.parse(data.Message);
-                            console.log(value);
-                            addChatUpdate(value.status, value.peer);
-                        }
-                        else if (data.MessageType == 8) {
-                            addChatMessage(data);
-                        }
-                        console.log(data);
-                    };
-
-                    signalingSocket.onclose = function (event) {
-                        if (event.wasClean) {
-                            console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
-                        } else {
-                            // e.g. server process killed or network down
-                            // event.code is usually 1006 in this case
-                            console.log('[close] Connection died');
-                        }
-                        signalingSocket = null;
-                    };
-
-                    signalingSocket.onerror = function (error) {
-                        console.log(`[error] ${error.message}`);
-                    };
-
-                    window.addEventListener('beforeunload', () => {
-                        signalingSocket.onclose = function () { }; // disable onclose handler first
-                        signalingSocket.close();
-                    }, { once: true });
-
-                } catch (ex) { console.error(ex); }
-            }
-
-            function onCreateSessionDescriptionError(error) {
-                console.log(`Failed to create session description: ${error.toString()}`);
-            }
-
-            async function onCreateOfferSuccess(desc) {
-                console.log(`Offer from localPeerConnection\n${desc.sdp}`);
-                console.log('localPeerConnection setLocalDescription start');
-                try {
-                    await localPeerConnection.setLocalDescription(desc);
-                    console.log(`setLocalDescription complete`);
-                } catch (e) {
-                    onSetSessionDescriptionError();
-                }
-
-                // send offer through signaling channel
-
-                //console.log('pc2 setRemoteDescription start');
-                //try {
-                //    await pc2.setRemoteDescription(desc);
-                //    onSetRemoteSuccess(pc2);
-                //} catch (e) {
-                //    onSetSessionDescriptionError();
-                //}
-
-                //console.log('pc2 createAnswer start');
-                //// Since the 'remote' side has no media stream we need
-                //// to pass in the right constraints in order for it to
-                //// accept the incoming offer of audio and video.
-                //try {
-                //    const answer = await pc2.createAnswer();
-                //    await onCreateAnswerSuccess(answer);
-                //} catch (e) {
-                //    onCreateSessionDescriptionError(e);
-                //}
-            }
-
-            function onSetLocalSuccess(pc) {
-            }
-
-            function onSetRemoteSuccess(pc) {
-                console.log(`setRemoteDescription complete`);
-            }
-
-            function onSetSessionDescriptionError(error) {
-                console.log(`Failed to set session description: ${error.toString()}`);
-            }
-
-            function gotRemoteStream(e) {
-                if (remoteVideo.srcObject !== e.streams[0]) {
-                    remoteVideo.srcObject = e.streams[0];
-                    console.log('pc2 received remote stream');
-                }
-            }
-
-            async function onCreateAnswerSuccess(desc) {
-                console.log(`Answer from pc2:\n${desc.sdp}`);
-                console.log('pc2 setLocalDescription start');
-                try {
-                    await pc2.setLocalDescription(desc);
-                    onSetLocalSuccess(pc2);
-                } catch (e) {
-                    onSetSessionDescriptionError(e);
-                }
-                console.log('localPeerConnection setRemoteDescription start');
-                try {
-                    await localPeerConnection.setRemoteDescription(desc);
-                    onSetRemoteSuccess(localPeerConnection);
-                } catch (e) {
-                    onSetSessionDescriptionError(e);
-                }
-            }
-
-            async function onIceCandidate(pc, event) {
-                try {
-                    await (getOtherPc(pc).addIceCandidate(event.candidate));
-                    onAddIceCandidateSuccess(pc);
-                } catch (e) {
-                    onAddIceCandidateError(pc, e);
-                }
-                console.log(`ICE candidate:\n${event.candidate ? event.candidate.candidate : '(null)'}`);
-            }
-
-            function onAddIceCandidateSuccess(pc) {
-                console.log(`addIceCandidate success`);
-            }
-
-            function onAddIceCandidateError(pc, error) {
-                console.log(`failed to add ICE Candidate: ${error.toString()}`);
-            }
-
-            function onIceStateChange(pc, event) {
-                if (pc) {
-                    console.log(`ICE state: ${pc.iceConnectionState}`);
-                    console.log('ICE state change event: ', event);
-                }
-            }
-
-
-
-            async function videoChat_OnRemoteStream(event) {
-                if (remoteVideo.srcObject !== event.streams[0]) {
-                    //remoteVideo.srcObject = event.streams[0];
-                    //console.log('pc2 received remote stream');
-                }
-            }
-
-            var $form = document.querySelector('form');
-            var $file = document.querySelector('input[type="file"]');
-
-
-            var $websocketTest = document.querySelector('.websocket-test');
-            var $progressValue = document.querySelector('span.progress-value');
-            var $progressTotal = document.querySelector('span.progress-total');
-            var $progressPercentage = document.querySelector('progress');
-
-
-            var $clientWebcam = document.getElementById('client-webcam');
-            var $remoteWebcams = document.getElementById('remote-webcams');
-            var $getWebcamButton = document.getElementById('get-webcam-feed');
-            var $startVideoChatButton = document.getElementById('start-video-chat');
-            var $endVideoChatButton = document.getElementById('end-video-chat');
             var $chatSessionKey = document.getElementById('chat-session-key');
-
-
             var $chatDisplayName = document.getElementById('chat-display-name');
             var $startChat = document.getElementById('start-chat');
             var $endChat = document.getElementById('end-chat');
@@ -803,15 +1017,12 @@
             var $message = document.getElementById('message');
             var $sendMessageButton = document.getElementById('send-message');
 
-            $websocketTest.addEventListener('click', websocketTest_onClick);
-
             $startChat.addEventListener('click', startChat_onClick);
             $endChat.addEventListener('click', endChat_onClick);
             $sendMessageButton.addEventListener('click', sendMessage_onClick);
 
-            $getWebcamButton.addEventListener('click', getWebcam_onClick);
-            $startVideoChatButton.addEventListener('click', startVideoChat_onClick);
-            $endVideoChatButton.addEventListener('click', endVideoChat_onClick);
+            // video
+            new VideoChat(document.querySelector('.card.video-chat'));
         });
     </script>
 </body>

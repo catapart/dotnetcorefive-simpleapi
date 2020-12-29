@@ -32,7 +32,7 @@ namespace SimpleAPI_NetCore50.Controllers
         public async Task<ActionResult> OpenProgressSession(int unitTotal = -1)
         {
             string sessionKey = this.PrepareSession("progress", unitTotal);
-            return CreatedAtAction(nameof(OpenSessionGet), sessionKey);
+            return CreatedAtAction(nameof(OpenProgressSession), sessionKey);
         }
 
         [HttpPost]

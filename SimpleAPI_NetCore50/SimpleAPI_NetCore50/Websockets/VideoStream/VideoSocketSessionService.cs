@@ -83,10 +83,19 @@ namespace SimpleAPI_NetCore50.Websockets
                         sessionSocket.Token.DisplayName = token.DisplayName;
                         sessionSocket.Token.IconUrl = token.IconUrl;
 
+                        Schemas.SocketSessionUpdate[] updates = new Schemas.SocketSessionUpdate[]
+                        {
+                            new Schemas.SocketSessionUpdate()
+                            {
+                                Status = "connect",
+                                Peers = new Models.SocketToken[1] { sessionSocket.Token }
+                            }
+                        };
+
                         SocketSessionMessageResponse hostAlertResponse = new SocketSessionMessageResponse()
                         {
                             MessageType = SocketSessionMessageType.StatusUpdates,
-                            Message = System.Text.Json.JsonSerializer.Serialize(new object[] { new { Status = "connect", Peers = new Models.SocketToken[1] { sessionSocket.Token } } })
+                            Message = System.Text.Json.JsonSerializer.Serialize(updates)
                         };
                         SendMessage(sessionKey, hostId, hostAlertResponse);
                         return;
