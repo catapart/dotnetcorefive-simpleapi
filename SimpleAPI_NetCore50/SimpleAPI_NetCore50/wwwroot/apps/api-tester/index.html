@@ -309,7 +309,6 @@
                         connectionUpdates.push(statusUpdate);
                     }
                     else if (statusUpdate.Status == 'disconnect') {
-                        this.removePeers(statusUpdate.Peers);
                         connectionUpdates.push(statusUpdate);
                     }
                 }
@@ -320,7 +319,7 @@
             updatePeerStatus(updates) {
                 for (let i = 0; i < updates.length; i++) {
                     let update = updates[i];
-                    if (update.status == 'disconnect') {
+                    if (update.Status == 'disconnect') {
                         this.removePeers(update.Peers);
                         continue;
                     }
@@ -357,30 +356,66 @@
             constructor() {
                 this.peerConnection = null;
                 this.token = null;
-                this.$peer = null;
                 this.stream = null;
+
+                this.createPeerElement();
             }
 
             addConnection(chat, id, configuration) {
 
                 console.log('RTCPeerConnection configuration:', configuration);
                 this.peerConnection = new RTCPeerConnection(configuration);
-                this.peerConnection.addEventListener('track', chat.peerConnection_onTrack.bind(chat));
-                //this.peerConnection.addEventListener('connectionstatechange', chat.peerConnection_onConnectionStateChange.bind(this));
-                console.log('Created peer connection object peerConnection');
+                this.peerConnection.addEventListener('track', (event) => {
+                    this.stream = event.streams[0];
+                });
                 this.peerConnection.addEventListener('icecandidate', (event) => {
                     if (event.candidate != null) {
-                        //this.peerConnection.addIceCandidate(event.candidate);
                         chat.sendValue({ type: 'candidate', candidate: event.candidate }, null, id);
                     }
                 });
                 this.peerConnection.addEventListener('iceconnectionstatechange', (event) => {
                     console.log('ICE state change event: ', event);
+                    if (this.peerConnection.iceConnectionState == 'connected') {
+                        this.setStream();
+                    }
                 });
 
                 // add local stream tracks to peer connection
                 chat.localStream.getTracks().forEach(track => this.peerConnection.addTrack(track, chat.localStream));
                 console.log('Added local stream to peerConnection');
+
+                this.$peer.peerConnection = this.peerConnection;
+            }
+            closeConnection() {
+
+                if (this.peerConnection) {
+                    this.peerConnection.ontrack = null;
+                    this.peerConnection.onremovetrack = null;
+                    this.peerConnection.onremovestream = null;
+                    this.peerConnection.onicecandidate = null;
+                    this.peerConnection.oniceconnectionstatechange = null;
+                    this.peerConnection.onsignalingstatechange = null;
+                    this.peerConnection.onicegatheringstatechange = null;
+                    this.peerConnection.onnegotiationneeded = null;
+
+                    if (this.$peer.$video.srcObject) {
+                        this.$peer.$video.srcObject.getTracks().forEach(track => track.stop());
+                    }
+
+                    this.peerConnection.close();
+                    this.peerConnection = null;
+                }
+
+                this.$peer.$video.removeAttribute("src");
+                this.$peer.$video.removeAttribute("srcObject");
+            }
+
+            createPeerElement() {
+                this.$peer = document.createElement('li');
+                this.$peer.classList.add('peer');
+                this.$peer.innerHTML = `<video width="800" height="450"></video>`
+                this.$peer.$video = this.$peer.querySelector('video');
+                this.$peer.$video.autoplay = true;
             }
 
             setStream() {
@@ -389,7 +424,6 @@
                 }
 
                 this.$peer.$video.srcObject = this.stream;
-                this.$peer.$video.play();
             }
         }
         class VideoChat {
@@ -399,17 +433,17 @@
                     throw new Error('$parentNode must be an instance of the HTMLElement type.')
                 }
 
-                this.configuration = {};
+                this.configuration = {
+                    iceServers: [     
+                        {
+                            urls: "stun:stun.stunprotocol.org" // this is an example server, but you should set up your own STUN/TURN servers
+                        }
+                    ]
+                };
                 this.chatSession = null;
                 this.localStream = null;
                 this.videoPeers = {};
                 // this.rooms = []; // [enhancement]: implement multiple rooms, instead of just one well-known chatroom.
-
-                // easy event forwarding
-                let node = document.createTextNode(null);
-                this.addEventListener = node.addEventListener.bind(node);
-                this.removeEventListener = node.removeEventListener.bind(node);
-                this.dispatchEvent = node.dispatchEvent.bind(node);
 
                 // create interface
                 this._createInterface();
@@ -450,9 +484,6 @@
                 this.updateChatPeers();
                 if (this.isHost == true) {
                     this.$hostSessionKey.value = event.detail.SessionKey;
-                }
-                else {
-                    // send room request
                 }
             }
             async chatSession_OnPeers(event) {
@@ -499,6 +530,11 @@
                             }
                         }
                         else if (update.Status == 'disconnect') {
+                            let videoPeer = this.videoPeers[peer.SocketId];
+                            videoPeer.closeConnection();
+                            videoPeer.$peer.remove();
+
+                            delete this.videoPeers[peer.SocketId];
                             let action = (peerIsHost == true) ? 'ended' : 'left';
                             let content = `<div>${displayName} has ${action} the chat.</div>`;
                             let $leaveMessage = this.showChatMessage(content);
@@ -515,71 +551,71 @@
 
                 let message = event.detail;
                 let data = JSON.parse(message.Message);
-                if (message.SenderId != this.chatSession.token.SocketId) {
-                    if (data.type == 'candidate') {
-                        try {
-                            let videoPeer = this.getPeer(message.SenderId);
-                            if (videoPeer != null) {
-                                videoPeer.peerConnection.addIceCandidate(data.candidate);
-                            }
-                        } catch (error) {
-                            console.log(`Failed to add ice candidate: ${error.toString()}`);
-                        }
-                    }
-                    else if (data.type == 'offer') {
+                if (message.SenderId == this.chatSession.token.SocketId) {
+                    return;
+                }
 
+                if (data.type == 'candidate') {
+                    try {
                         let videoPeer = this.getPeer(message.SenderId);
-                        if (videoPeer == null) {
-                            videoPeer = this.addPeer(message.SenderId);
-                            videoPeer.addConnection(this, message.SenderId, data.configuration);
+                        if (videoPeer != null) {
+                            videoPeer.peerConnection.addIceCandidate(data.candidate);
                         }
+                    } catch (error) {
+                        console.log(`Failed to add ice candidate: ${error.toString()}`);
+                    }
+                }
+                else if (data.type == 'offer') {
 
-                        try {
+                    let videoPeer = this.getPeer(message.SenderId);
+                    if (videoPeer == null) {
+                        videoPeer = this.addPeer(message.SenderId);
+                        videoPeer.addConnection(this, message.SenderId, data.configuration);
+                    }
+
+                    try {
+                        console.log('setRemoteDescription start');
+                        await videoPeer.peerConnection.setRemoteDescription(data.offer);
+                        console.log(`setRemoteDescription complete`);
+
+                    } catch (error) {
+                        console.log(`Failed to set remote session description: ${error.toString()}`);
+                    }
+
+                    // create answer
+                    console.log('createAnswer start');
+                    try {
+                        const answer = await videoPeer.peerConnection.createAnswer();
+                        console.log('answer created');
+
+                        videoPeer.peerConnection.setLocalDescription(answer);
+                        this.$videos.appendChild(videoPeer.$peer);
+                        videoPeer.setStream();
+
+                        let answerMessage = { type: 'answer', answer: answer };
+                        this.sendValue(answerMessage);
+
+                        let content = `<div>${this.chatSession.peerTokens[message.SenderId].DisplayName} has joined the chat.</div>`;
+                        let $joinMessage = this.showChatMessage(content);
+                        $joinMessage.classList.add('status');
+
+                    } catch (error) {
+                        console.error(error);
+                    }
+                }
+                else if (data.type == 'answer') {
+                    try {
+                        let videoPeer = this.getPeer(message.SenderId);
+                        if (videoPeer != null) {
                             console.log('setRemoteDescription start');
-                            await videoPeer.peerConnection.setRemoteDescription(data.offer);
+                            await videoPeer.peerConnection.setRemoteDescription(data.answer);
                             console.log(`setRemoteDescription complete`);
 
-                        } catch (error) {
-                            console.log(`Failed to set remote session description: ${error.toString()}`);
-                        }
-
-                        // create answer
-                        console.log('createAnswer start');
-                        try {
-                            const answer = await videoPeer.peerConnection.createAnswer();
-                            console.log('answer created');
-
-                            videoPeer.peerConnection.setLocalDescription(answer);
-                            videoPeer.$peer = this.createPeerElement(videoPeer.peerConnection);
                             this.$videos.appendChild(videoPeer.$peer);
                             videoPeer.setStream();
-
-                            let answerMessage = { type: 'answer', answer: answer };
-                            this.sendValue(answerMessage);
-
-                            let content = `<div>${this.chatSession.peerTokens[message.SenderId].DisplayName} has joined the chat.</div>`;
-                            let $joinMessage = this.showChatMessage(content);
-                            $joinMessage.classList.add('status');
-
-                        } catch (error) {
-                            console.error(error);
                         }
-                    }
-                    else if (data.type == 'answer') {
-                        try {
-                            let videoPeer = this.getPeer(message.SenderId);
-                            if (videoPeer != null) {
-                                console.log('setRemoteDescription start');
-                                await videoPeer.peerConnection.setRemoteDescription(data.answer);
-                                console.log(`setRemoteDescription complete`);
-
-                                videoPeer.$peer = this.createPeerElement(videoPeer.peerConnection);
-                                this.$videos.appendChild(videoPeer.$peer);
-                                videoPeer.setStream();
-                            }
-                        } catch (error) {
-                            console.log(`Failed to set remote session description: ${error.toString()}`);
-                        }
+                    } catch (error) {
+                        console.log(`Failed to set remote session description: ${error.toString()}`);
                     }
                 }
             }
@@ -627,29 +663,23 @@
 
             async joinVideoChat_onClick(event) {
                 this.join(this.$guestSessionKey.value);
+                this.$leaveVideoChatButton.disabled = false;
             }
             async leaveVideoChat_onClick(event) {
 
-            }
+                this.closeLocalStream();
 
-            peerConnection_onTrack(event) {
-                //console.log(event.currentTarget);
-                let videoPeer;
                 for (let property in this.videoPeers) {
                     if (this.videoPeers.hasOwnProperty(property)) {
-                        if (this.videoPeers[property].peerConnection == event.currentTarget) {
-                            videoPeer = this.videoPeers[property];
-                        }
+                        this.videoPeers[property].closeConnection();
+                        this.videoPeers[property].$peer.remove();
                     }
                 }
-                videoPeer.stream = event.streams[0];
-                event.track.onunmute = () => {
-                    console.log('track unmuted');
-                    videoPeer.setStream();
-                }
-            }
-            peerConnection_onConnectionStateChange(event) {
-                console.log("[STATE]", event);
+                this.videoPeers = {};
+
+                this.$leaveVideoChatButton.disabled = true;
+
+                this.chatSession.close();
             }
 
             // functionality
@@ -774,6 +804,18 @@
                 return $message;
             }
 
+            addLocalStream(peerConnection) {
+
+            }
+            closeLocalStream() {
+                if (this.$clientWebcam.srcObject) {
+                    this.$clientWebcam.srcObject.getTracks().forEach(track => track.stop());
+                }
+
+                this.$clientWebcam.removeAttribute("src");
+                this.$clientWebcam.removeAttribute("srcObject");
+            }
+
             addPeer(id) {
                 let videoPeer = new VideoPeer();
                 videoPeer.token = this.chatSession.peerTokens[id];
@@ -790,15 +832,6 @@
                     }
                 }
                 return null;
-            }
-            createPeerElement(peerConnection) {
-                let $peer = document.createElement('li');
-                $peer.classList.add('peer');
-                $peer.innerHTML = `<video width="800" height="450"></video>`
-                $peer.$video = $peer.querySelector('video');
-                $peer.$video.autoplay = true;
-                $peer.peerConnection = peerConnection;
-                return $peer;
             }
             getPeerElement(peerConnection) {
                 let $peer = null;
