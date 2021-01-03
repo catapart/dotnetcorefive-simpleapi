@@ -1,0 +1,669 @@
+/* html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: #FFF0;
+}
+
+body {
+    margin: 0;
+    color: #636363;
+    font-family: 'Open Sans', sans-serif;
+}
+
+.body {
+    padding: 1rem;
+}
+
+header {
+    text-align: center;
+}
+.downloadPrompt {
+    display: none;
+    padding: 10px;
+    box-shadow: 0px 0 7px 4px #00000030;
+    justify-content: center;
+    max-width: 300px;
+    margin: auto;
+    margin-top: 60px;
+}
+
+.downloadButton {
+    background: #109d58;
+    color: aliceblue;
+    padding: 5px 10px;
+    min-width: 100px;
+    border-radius: 2px;
+    border: 1px solid #00723b;
+    text-transform: uppercase;
+}
+
+#appContainer {
+    overflow: hidden;
+    display: grid;
+    height: 100vh;
+    grid-template-rows: auto 1fr auto;
+}
+
+
+
+
+wrapper {
+    display: grid;
+    grid-template-columns: 1fr min(65ch, 100%) 1fr;
+    }
+    .wrapper > * {
+    grid-column: 2;
+    }
+    .full-bleed {
+    width: 100%;
+    grid-column: 1 / 4;
+    } */
+
+
+/* |||||||||| CSS RESET |||||||||| */
+/* Source: https://hankchizljaw.com/wrote/a-modern-css-reset/ */
+
+/* Box sizing rules */
+*, *::before, *::after 
+{
+  box-sizing: border-box;
+}
+
+/* Remove default padding */
+ul[class], ol[class] 
+{
+  padding: 0;
+}
+
+/* Remove default margin */
+body,
+h1, h2, h3, h4,
+p,
+ul[class], ol[class], li, dl, dd, 
+figure, figcaption,
+blockquote
+{
+  margin: 0;
+}
+
+/* Set core body defaults */
+html
+{
+    font-size: 8px;
+}
+body
+{
+  min-height: 100vh;
+  scroll-behavior: smooth;
+  text-rendering: optimizeSpeed;
+  line-height: 1.5;
+}
+
+/* Remove list styles on ul, ol elements with a class attribute */
+ul[class], ol[class]
+{
+  list-style: none;
+}
+
+/* A elements that don't have a class get default styles */
+a:not([class])
+{
+  text-decoration-skip-ink: auto;
+}
+
+/* Make images easier to work with */
+img
+{
+  max-width: 100%;
+  display: block;
+}
+
+/* Natural flow and rhythm in articles by default */
+article > * + *
+{
+  margin-top: 1em;
+}
+
+/* Inherit fonts for inputs and buttons */
+input,
+button,
+textarea,
+select
+{
+  font: inherit;
+}
+
+/* Remove all animations and transitions for people that prefer not to see them */
+@media (prefers-reduced-motion: reduce)
+{
+  *
+  {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* |||||||||| IMPORTS |||||||||| */
+@font-face
+{
+    font-family: 'Vegur';
+    src: local('Vegur-Regular'),
+        url('./assets/fonts/Vegur-Regular-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+@font-face {
+    font-family: 'Vegur Bold';
+    src: local('Vegur-Bold'), url('./assets/fonts/Vegur-Bold-webfont.woff') format('woff');
+    font-weight: bold;
+    font-style: normal;
+}
+@font-face {
+    font-family: 'Vegur Light';
+    src: local('Vegur-Light'), url('./assets/fonts/Vegur-Light-webfont.woff') format('woff');
+    font-weight: 300;
+    font-style: normal;
+}
+
+
+/* |||||||||| MAIN STYLES |||||||||| */
+body
+{
+    background-color: #202024;
+    color: rgba(255, 255, 255, .75);
+    font-family: 'Vegur Light', 'Open Sans', sans-serif;
+    font-size: calc(1rem + 1vw);
+}
+
+input
+,select
+,textarea
+{
+    background-color: #191919;
+    color: #a4a8aa;
+    border: solid 1px #a4a8aa;
+    padding: 0 .25em;
+}
+
+button,input[type="button"]
+{
+    font-family: Vegur, 'Open Sans', sans-serif;
+}
+
+main
+{
+    display: grid;
+    grid-template-columns: 1fr min(65ch, 100%) 1fr;
+}
+
+main > * 
+{
+    grid-column: 2;
+}
+main > .full-width 
+{
+    width: 100%;
+    grid-column: 1 / 4;
+    display: inherit;
+    grid-template-columns: inherit;
+}
+
+.full-width .inset 
+{
+    grid-column: 2;
+}
+
+main > .content
+{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, min(65ch, 100%));
+    grid-gap: 1em;
+    grid-auto-rows: minmax(300px, auto);
+    padding: 2em;
+}
+
+main > .content .card 
+{
+    background-color: #2c2c2c;
+    border: solid 1px #1F1F1F;
+}
+
+main > .content .card.chat
+{
+    --theme-gradient: linear-gradient(to bottom, #01aaff, #4372ff);
+    --theme-gradient-reverse: linear-gradient(to top, #01aaff, #4372ff);
+}
+
+main > .content .card.video-chat
+{
+    grid-column: 1/3;
+}
+
+main > .content .card > header
+{
+    border-bottom: solid 1px #222222;
+    padding: .25em .5em;
+    margin-bottom: .5em;
+}
+
+main > .content .card .chatroom
+{
+    margin: .5em;
+    padding: 5px;
+    background-color: #28282c;
+    box-shadow: 1px 1px 7px 3px rgba(0,0,0,.3);
+    border-width: 1px;
+    border-style: solid;
+    border-image: var(--theme-gradient);
+    border-image-slice: 1;
+}
+
+main > .content .card .chatroom > header
+{
+    border-bottom-width: 1px;
+    border-bottom-style: solid;
+    border-image: var(--theme-gradient);
+    border-image-slice: 1;
+    padding-bottom: .25em;
+    display: grid;
+    grid-template-columns: 1fr max-content;
+}
+
+main > .content .card .chatroom > header > .title
+{
+    font-family: Vegur, 'Open Sans', sans-serif;
+    font-size: 1.4em;
+    align-self: center;
+    white-space:nowrap;
+    overflow-x: hidden;
+    text-overflow:ellipsis;
+}
+
+.session-key-copier
+{
+    display: grid;
+    grid-template-columns: 1fr max-content;
+    grid-template-rows: max-content 1fr;
+    column-gap: .5em;
+    font-size: .8em;
+}
+
+.session-key-copier .description
+{
+    grid-column: 1/2;
+    grid-row-start:1;
+    text-align:right;
+    font-size:.6em;
+}
+
+.session-key-copier .value
+{
+    font-family: Vegur, 'Open Sans', sans-serif;
+    text-align:right;
+    grid-row-start:2;
+    width: 8ch;
+    justify-self: flex-end;
+    user-select:none;
+}
+
+.session-key-copier .copy
+{
+    grid-row:1/3;
+}
+
+main > .content .card .chatroom button
+{
+    background: var(--theme-gradient);
+    color: #fff;
+    border-radius: 0px;
+    min-width: 32px;
+    border:none;
+    cursor: pointer;
+    display: flex;
+    align-items:center;
+    padding: .1em .4em;
+}
+main > .content .card .chatroom button:focus
+,main > .content .card .chatroom button:active
+{
+    background: var(--theme-gradient-reverse);
+}
+main > .content .card .chatroom button[disabled]
+{
+    background: linear-gradient(to bottom, #eee, #ddd);
+    color: #aaa;
+    cursor: not-allowed;
+}
+main > .content .card .chatroom button[disabled] .icon
+{
+    border-right-color: #aaa;
+}
+main > .content .card .chatroom button[disabled] .icon path
+{
+    fill: #aaa;
+}
+
+main > .content .card .chatroom button .icon
+{
+    width: 36px;
+    height: 36px;
+    padding-right: .4em;
+    margin-right: .5em;
+    border-right: solid 1px #fff;
+}
+
+main > .content .card .chatroom button .icon path
+{
+    fill: #fff;
+}
+
+main > .content .card .chatroom > .peers
+{
+    font-size:.7em;
+    cursor:pointer;
+    display: none;
+}
+main > .content .card .chatroom.in-session > .peers
+{
+    display: initial;
+}
+
+main > .content .card .chatroom > .peers > summary::-webkit-details-marker
+{
+    display: none;
+}
+
+main > .content .card .chatroom.in-session > .peers .description
+{
+    display: none;
+}
+main > .content .card .chatroom.in-session > .peers.others .description
+{
+    display: initial;
+}
+
+main > .content .card .chatroom > .peers .first-peer
+{
+    font-family: Vegur, 'Open Sans', sans-serif;
+    margin-right: 1ch;
+}
+
+main > .content .card .chatroom > .peers dt
+{
+    font-family: Vegur, 'Open Sans', sans-serif;
+}
+
+main > .content .card .chatroom > .display
+{    
+    height: 400px;
+    display: flex;
+}
+
+#chat-messages
+{
+    flex: 1;
+    list-style:none;
+    padding: 1em 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+#chat-messages li
+{
+    margin: 0 .5em .5em;
+    scroll-margin: .5em;
+}
+#chat-messages li:last-of-type
+{
+    margin-bottom: 0;
+}
+
+#chat-messages .no-session
+{
+    background: linear-gradient(to bottom, #282424, #282121);
+    border: solid 1px #111;
+    font-size: .6em;
+    padding: .2em .5em;
+    align-self: stretch;
+    text-align:center;
+}
+
+#chat-messages .status
+{
+    background: linear-gradient(to bottom, #2d2d2d, #212121);
+    border: solid 1px #111;
+    font-size: .6em;
+    padding: .2em .5em;
+}
+
+#chat-messages .message
+{
+    align-self:flex-start;
+    color:#fff;
+    display: flex;
+    align-items: flex-start;
+}
+#chat-messages .message.self
+{
+    align-self: flex-end;
+}
+
+#chat-messages .message > .user
+{
+    display: flex;
+    flex-direction: column;
+    align-content: center;
+    justify-content: center;
+    margin-right: .5em;
+}
+
+#chat-messages .message .image-container
+{
+    background-color: #fff;
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: .25em;
+}
+
+#chat-messages .message > .user .name
+{
+    font-size: .5em;
+    text-align: center;
+}
+
+#chat-messages .message .body
+{
+    background: var(--theme-gradient);
+    border: solid 1px #111;
+    padding: .25em;
+}
+#chat-messages .message.self .body
+{
+    background: linear-gradient(to bottom, #313131, #262626);
+}
+
+#chat-messages .message .body > header
+{
+    font-family: Vegur, 'Open Sans', sans-serif;
+}
+
+#chat-messages .message .body > .content
+{
+    font-size: .8em;
+    min-width: 200px;
+}
+
+#chat-messages .message .body > footer
+{
+    font-size: .5em;
+    display:flex;
+    justify-content: flex-end;
+}
+
+#chat-messages .message .body > footer .date
+{
+    margin-right: .5em;
+}
+
+main > .content .card .chatroom > form
+{
+    display: grid;
+    grid-template-columns: 1fr max-content;
+}
+
+main > .content .card .chatroom > form input
+{
+    border-radius: 0px;
+    border:none;
+    font-family:Vegur, 'Open Sans', sans-serif;
+}
+
+main > .content .card .setup
+{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
+    grid-column-gap: .5em;
+    margin: .5em;
+    font-family: Vegur, 'Open Sans', sans-serif;
+}
+
+main > .content .card .setup .option
+{
+    background-color:#ffffff;
+    box-shadow: 1px 1px 7px 3px rgba(0,0,0,.3);
+    display: flex;
+    flex-direction: column;
+}
+
+main > .content .card .setup .display
+{
+    background:var(--theme-gradient);
+    color: #fff;
+    box-shadow: 1px 1px 5px 2px rgba(0,0,0,.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: .5em;
+}
+
+main > .content .card .setup .display .description
+{
+    margin-bottom: .25em;
+}
+
+main > .content .card .setup .display svg
+{
+    width: 64px;
+    height: 64px;
+    margin-bottom: .25em;
+}
+
+main > .content .card .setup .display svg path
+{
+    fill: #fff;
+}
+
+main > .content .card .setup .display .label
+{
+    font-size: .6em;
+    align-self:stretch;
+}
+
+main > .content .card .setup .display input
+{
+    background-color: #fff;
+    color: #232323;
+    border-radius: 0;
+    margin-bottom: .25em;
+    border: none;
+    align-self:stretch;
+}
+
+main > .content .card .setup .choice
+{
+    background-color: #fff;
+    color: #232323;
+    padding: .5em;
+}
+
+main > .content .card .setup .choice .control
+{
+    display:grid;
+    grid-template-columns: 1fr max-content;
+    grid-template-rows: max-content auto;
+    margin-bottom: .5em;
+}
+
+main > .content .card .setup .choice .label
+{
+    font-size: .6em;
+    display: block;
+}
+
+main > .content .card .setup .choice input
+{
+    font-family: Vegur, 'Open Sans', sans-serif;
+    background-color: #fff;
+    border: solid 1px #666666;
+    border-radius: 0;
+    grid-row-start:2;
+    color: #232323;
+    min-width: 100px;
+}
+
+main > .content .card .setup .choice button
+{
+    background: var(--theme-gradient);
+    color: #fff;
+    border: none;
+    border-radius: 0;
+    grid-row-start:2;
+    font-size: .8em;
+    padding: 0 .5em;
+    margin-right: .25em;
+    cursor: pointer;
+}
+main > .content .card .setup .choice button:active
+,main > .content .card .setup .choice button:focus
+{
+    background: var(--theme-gradient-reverse);
+}
+main > .content .card .setup .choice button:last-of-type
+{
+    margin-right: 0;
+}
+main > .content .card .setup .choice button[disabled]
+{
+    background: linear-gradient(to bottom, #eee, #ddd);
+    color: #aaa;
+    cursor: not-allowed;
+}
+
+main > .content .card .setup .choice .message
+{
+    color: #ff6464;
+    margin-bottom: .5em;
+    font-size:.8em;
+}
+
+main > .content .card > footer
+{
+    border-top: solid 1px #222222;
+    padding: .25em .5em;
+    margin-top: .5em;
+}
+
+main > .content .card.video-chat
+{
+    grid-column: 1/3;
+}

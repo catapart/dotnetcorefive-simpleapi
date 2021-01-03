@@ -327,7 +327,7 @@ namespace SimpleAPI_NetCore50.Websockets
 
         private static string CreateSessionKey()
         {
-            return GenerateRandomString(12);
+            return GenerateRandomString(5);
         }
         private static string GenerateRandomString(int length, bool useNumbers = true)
         {
