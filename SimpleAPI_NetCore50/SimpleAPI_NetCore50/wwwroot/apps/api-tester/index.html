@@ -553,24 +553,30 @@
                         }
 
                         async function textHostChat_onClick(event) {
-                            if (chatSession != null) {
-                                console.error('Session is already active. End the session before starting a new one.');
-                                return;
+                            try {
+                                if (chatSession != null) {
+                                    console.error('Session is already active. End the session before starting a new one.');
+                                    return;
+                                }
+
+                                resetChat();
+
+                                chatSession = createChatSession();
+                                await chatSession.host($textHostDisplayName.value);
+
+                                prepareChat();
+
+                                $textHostButton.setAttribute('disabled', 'disabled');
+                                $textEndButton.removeAttribute('disabled');
+                                $textJoinButton.setAttribute('disabled', 'disabled');
+                                $textLeaveButton.setAttribute('disabled', 'disabled');
+
+                                $chatroom.classList.add('in-session');
                             }
-
-                            resetChat();
-
-                            chatSession = createChatSession();
-                            await chatSession.host($textHostDisplayName.value);
-
-                            prepareChat();
-
-                            $textHostButton.setAttribute('disabled', 'disabled');
-                            $textEndButton.removeAttribute('disabled');
-                            $textJoinButton.setAttribute('disabled', 'disabled');
-                            $textLeaveButton.setAttribute('disabled', 'disabled');
-
-                            $chatroom.classList.add('in-session');
+                            catch (exception) {
+                                resetChat();
+                                showChatError($textHostErrorMessage, exception);
+                            }
                         }
                         async function textEndChat_onClick(event) {
                             if (chatSession == null) {
@@ -586,24 +592,30 @@
                         }
 
                         async function textJoinChat_onClick(event) {
-                            if (chatSession != null) {
-                                console.error('Session is already active. End the session before starting a new one.');
-                                return;
+                            try {
+                                if (chatSession != null) {
+                                    console.error('Session is already active. End the session before starting a new one.');
+                                    return;
+                                }
+
+                                resetChat();
+
+                                chatSession = createChatSession();
+                                await chatSession.join($textGuestSessionKey.value, $textGuestDisplayName.value);
+
+                                prepareChat();
+
+                                $textJoinButton.setAttribute('disabled', 'disabled');
+                                $textLeaveButton.removeAttribute('disabled');
+                                $textHostButton.setAttribute('disabled', 'disabled');
+                                $textEndButton.setAttribute('disabled', 'disabled');
+
+                                $chatroom.classList.add('in-session');
                             }
-
-                            resetChat();
-
-                            chatSession = createChatSession();
-                            await chatSession.join($textGuestSessionKey.value, $textGuestDisplayName.value);
-
-                            prepareChat();
-
-                            $textJoinButton.setAttribute('disabled', 'disabled');
-                            $textLeaveButton.removeAttribute('disabled');
-                            $textHostButton.setAttribute('disabled', 'disabled');
-                            $textEndButton.setAttribute('disabled', 'disabled');
-
-                            $chatroom.classList.add('in-session');
+                            catch (exception) {
+                                resetChat();
+                                showChatError($textJoinErrorMessage, exception);
+                            }
                         }
                         async function textLeaveChat_onClick(event) {
                             if (chatSession == null) {
@@ -833,6 +845,10 @@
 
                             $chatMessages.scrollTop = $chatMessages.scrollHeight - $chatMessages.getBoundingClientRect().height;
                             return $message;
+                        }
+                        function showChatError($target, error) {
+                            console.error(error);
+                            $target.textContent = 'An error has occurred. Please see the console for more details.';
                         }
                     }
                 </script>
