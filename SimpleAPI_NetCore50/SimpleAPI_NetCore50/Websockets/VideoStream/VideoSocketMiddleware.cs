@@ -65,7 +65,7 @@ namespace SimpleAPI_NetCore50.Websockets
                         MessageType = Schemas.SocketSessionMessageType.StatusUpdates,
                         Message = System.Text.Json.JsonSerializer.Serialize(new object[] { new { Status = "disconnect", Peers = new Models.SocketToken[1] { sessionSocket.Token } } })
                     };
-                    SessionService.SendMessage(sessionKey, hostId, response);
+                    SessionService.SendMessageToPeers(sessionKey, sessionSocket.Token.SocketId, response);
                 }
 
             });

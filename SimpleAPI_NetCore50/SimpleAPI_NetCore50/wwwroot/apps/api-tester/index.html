@@ -30,14 +30,24 @@
                 'ByteArray' // binary data
             ];
         class WebsocketSession {
+
+            get isHost() {
+                let tokenId = this.token?.SocketId;
+                let hostId = this.hostToken?.SocketId;
+                if (tokenId == null || hostId == null || hostId != tokenId) {
+                    return false;
+                }
+                return true;
+            }
+
             constructor() {
                 this.domain = new URL(window.location).host;
 
                 this.socket = null;
+                this.sessionKey = null;
                 this.token = null;
                 this.hostToken = null;
                 this.peerTokens = {};
-                this.offer = null;
 
                 // easy event forwarding
                 let node = document.createTextNode(null);
@@ -79,7 +89,10 @@
 
                         this.socket = new WebSocket(url);
 
-                        this.socket.onopen = (event) => { resolve(); handlers.onOpen(event); }
+                        this.__resolveConnect__ = resolve;
+                        this.__rejectConnect__ = reject;
+
+                        this.socket.onopen = handlers.onOpen;
                         this.socket.onmessage = handlers.onMessage;
                         this.socket.onclose = handlers.onClose;
                         this.socket.onerror = handlers.onError;
@@ -91,6 +104,12 @@
 
                     }
                     catch (ex) {
+                        if (this.__resolveConnect__ != undefined) {
+                            delete this.__resolveConnect__;
+                        }
+                        if (this.__rejectConnect__ != undefined) {
+                            delete this.__rejectConnect__;
+                        }
                         console.error(ex);
                         reject();
                     }
@@ -115,37 +134,44 @@
                 // dispatch event if it's unrelated to the websocket session (messages/notifications/etc)
                 switch (socketMessageTypeMap[data.MessageType]) {
                     case 'Greeting':
+                        console.log('[Websocket] Greeting received.');
                         let greetingValue = JSON.parse(data.Message);
-                        console.log(greetingValue);
                         this.initSession(greetingValue);
                         let greetingEvent = new CustomEvent('greeting', { detail: greetingValue });
                         this.dispatchEvent(greetingEvent);
                         break;
                     case 'Introduction':
-                        console.error('Client should never receive "Introduction" Message Type.');
-                        return;
+                        console.log('[Websocket] Introduction received.');
+                        if (!this.isHost) {
+                            console.error('Client should never receive "Introduction" Message Type.');
+                        }
+                        let introductionValue = JSON.parse(data.Message);
+                        this.evaluateAccess(introductionValue);
+                        break;
                     case 'Heartbeat':
                         console.log('[Websocket] Heartbeat received.');
                         // don't usually dispatch heartbeats, but I'm not utilizing them, either.
                         break;
                     case 'Properties':
+                        console.log('[Websocket] Properties received.');
                         let propertiesValue = JSON.parse(data.Message);
-                        console.log(propertiesValue);
                         let propertiesEvent = new CustomEvent('properties', { detail: propertiesValue });
                         this.dispatchEvent(propertiesEvent);
                         break;
                     case 'StatusUpdates':
+                        console.log('[Websocket] Status Updates received.');
                         let statusUpdatesValue = JSON.parse(data.Message);
-                        console.log(statusUpdatesValue);
-                        let connectionUpdates = this.getConnectionUpdates(statusUpdatesValue);
-                        if (connectionUpdates.length > 0) {
-                            this.updatePeerStatus(connectionUpdates);
-                            let peersEvent = new CustomEvent('peers', { detail: connectionUpdates });
+                        let updates = this.filterUpdates(statusUpdatesValue);
+                        if (updates.accessUpdate != null) {
+                            this.accessSession(updates.accessUpdate);
+                        }
+                        if (updates.connectionUpdates.length > 0) {
+                            this.updatePeerStatus(updates.connectionUpdates);
+                            let peersEvent = new CustomEvent('peers', { detail: updates.connectionUpdates });
                             this.dispatchEvent(peersEvent);
                         }
-                        let otherUpdates = statusUpdatesValue.filter((item) => { return (item.Status.toLowerCase().indexOf('connect') == -1); });
-                        if (otherUpdates.length > 0) {
-                            let statusUpdatesEvent = new CustomEvent('statusupdates', { detail: otherUpdates });
+                        if (updates.otherUpdates.length > 0) {
+                            let statusUpdatesEvent = new CustomEvent('statusupdates', { detail: updates.otherUpdates });
                             this.dispatchEvent(statusUpdatesEvent);
                         }
                         break;
@@ -195,6 +221,7 @@
             //functionality
             initSession(greeting) {
 
+                this.sessionKey = greeting.SessionKey;
                 this.token = greeting.Token;
                 this.hostToken = greeting.HostToken;
 
@@ -211,22 +238,81 @@
 
                 console.log("Sending Introduction: ", this.token);
                 let message = JSON.stringify(this.token);
-                this.socket.send(JSON.stringify({ Type: 2, SenderId: this.token, Message: message }));
+                this.socket.send(JSON.stringify({ Type: 2, SenderId: this.token.SocketId, Message: message, Recipients: [this.hostToken.SocketId] }));
+            }
+            accessSession(accessUpdate) {
+                try {
+                    if (accessUpdate.Status == 'accessdenied') {
+                        throw new Error('Access Denied');
+                    }
+
+                    let token = accessUpdate.Peers[0];
+                    this.token = token;
+                    if (this.token.SocketId == this.hostToken.SocketId) {
+                        this.hostToken = token;
+                    }
+
+                    // update all other peers in the chat that you have joined
+                    let update = { Status: 'connect', Peers: [token] };
+                    let message = JSON.stringify([update]);
+                    console.log("Sending Connection to existing peers: ", message);
+                    this.socket.send(JSON.stringify({ Type: 5, SenderId: this.token.SocketId, Message: message }));
+
+                    this.__resolveConnect__(accessUpdate);
+                }
+                catch (error) {
+                    this.__rejectConnect__({ error: error, update: accessUpdate });
+                }
+                finally {
+                    if (this.__resolveConnect__ != undefined) {
+                        delete this.__resolveConnect__;
+                    }
+                    if (this.__rejectConnect__ != undefined) {
+                        delete this.__rejectConnect__;
+                    }
+                }
+            }
+            evaluateAccess(peer) {
+                if (peer == null) {
+                    console.error("Cannot evaluate access of null peer.");
+                    return;
+                }
+
+                console.log("Evaluating access: ", peer);
+                let access = false;
+                access = true; // [enhancement]: Any host evaluation of client access
+
+                let update = { Status: 'accessdenied', Peers: [peer] };
+                if (access == true) {
+                    console.log("Access Granted for", peer);
+                    update.Status = 'accessgranted';
+                }
+                let message = JSON.stringify([update]);
+                console.log("Sending Access: ", message);
+                this.socket.send(JSON.stringify({ Type: 5, SenderId: this.token.SocketId, Message: message, Recipients: [peer.SocketId] }));
             }
 
-            getConnectionUpdates(statusUpdates) {
+            filterUpdates(statusUpdates) {
+                let accessUpdate = null;
                 let connectionUpdates = [];
+                let otherUpdates = [];
                 for (let i = 0; i < statusUpdates.length; i++) {
                     let statusUpdate = statusUpdates[i];
-                    if (statusUpdate.Status == 'connect') {
-                        connectionUpdates.push(statusUpdate);
+                    let status = statusUpdate.Status.toLowerCase();
+                    if (status == 'accessgranted' || status == 'accessdenied') {
+                        accessUpdate = statusUpdate;
+                        continue;
                     }
-                    else if (statusUpdate.Status == 'disconnect') {
+                    if (status.indexOf('connect') == -1) {
+                        otherUpdates.push(statusUpdate);
+                        continue;
+                    }
+                    else {
                         connectionUpdates.push(statusUpdate);
                     }
                 }
 
-                return connectionUpdates;
+                return { accessUpdate, connectionUpdates, otherUpdates };
             }
 
             updatePeerStatus(updates) {
@@ -249,6 +335,14 @@
                 }
             }
             updatePeer(peer) {
+
+                if (peer.SocketId == this.token.SocketId) {
+                    this.token = peer;
+                }
+                if (peer.SocketId == this.hostToken.SocketId) {
+                    this.hostToken = peer;
+                }
+
                 this.peerTokens[peer.SocketId] = peer;
             }
             removePeers(peers) {
@@ -281,349 +375,6 @@
         </header>
 
         <div class="content full-width">
-            <script defer type="module">
-
-                document.addEventListener('DOMContentLoaded', Init);
-
-                async function Init() {
-                    // establish a well-known variable
-                    // to hold the websocket session
-                    var chatSession = null;
-
-                    // define well-known html elements
-                    const $chatroom = document.querySelector('.card.chat .chatroom');
-                    $chatroom.$title = $chatroom.querySelector('header > .title');
-
-                    const $sessionKeyCopier = $chatroom.querySelector('.session-key-copier');
-                    $sessionKeyCopier.$value = $sessionKeyCopier.querySelector('.value');
-                    $sessionKeyCopier.$copyButton = $sessionKeyCopier.querySelector('button.copy');
-
-                    const $peers = $chatroom.querySelector('.peers');
-                    $peers.$firstPeer = $peers.querySelector('.first-peer');
-                    $peers.$modifiedCount = $peers.querySelector('.modified-count');
-                    $peers.$chatPeers = $peers.querySelector('dl');
-
-                    const $chatMessages = document.getElementById('chat-messages');
-                    $chatMessages.$noSession = $chatMessages.querySelector('.no-session');
-
-                    const $textChatMessageForm = document.getElementById('text-chat-message');
-                    $textChatMessageForm.$value = $textChatMessageForm.querySelector('input');
-                    $textChatMessageForm.$submit = $textChatMessageForm.querySelector('.submit');
-
-                    const $chatSetup = document.querySelector('.card.chat .setup');
-
-                    const $textHostDisplayName = $chatSetup.querySelector('.choice.host .display-name');
-                    const $textHostButton = $chatSetup.querySelector('.choice.host .action');
-                    const $textEndButton = $chatSetup.querySelector('.choice.host .exit');
-                    const $textHostErrorMessage = $chatSetup.querySelector('.choice.host .message');
-
-                    const $textGuestSessionKey = $chatSetup.querySelector('.display.join .session-key');
-                    const $textGuestDisplayName = $chatSetup.querySelector('.choice.join .display-name');
-                    const $textJoinButton = $chatSetup.querySelector('.choice.join .action');
-                    const $textLeaveButton = $chatSetup.querySelector('.choice.join .exit');
-                    const $textJoinErrorMessage = $chatSetup.querySelector('.choice.join .message');
-
-                    // add functionality
-                    $sessionKeyCopier.$copyButton.addEventListener('click', textCopyButton_onClick);
-                    $textHostButton.addEventListener('click', textHostChat_onClick);
-                    $textEndButton.addEventListener('click', textEndChat_onClick);
-                    $textJoinButton.addEventListener('click', textJoinChat_onClick);
-                    $textLeaveButton.addEventListener('click', textLeaveChat_onClick);
-                    $textChatMessageForm.addEventListener('submit', textChatMessageForm_onSubmit);
-
-                    resetChat();
-
-                    // handlers
-                    function textCopyButton_onClick(event) {
-                        if (chatSession == null) {
-                            console.error('Cannot copy session key from session that has not been started.');
-                            return;
-                        }
-                        $sessionKeyCopier.$value.select();
-                        $sessionKeyCopier.$value.setSelectionRange(0, 99999);
-                        document.execCommand('copy');
-                        addChatStatus('Copied the Session Key');
-                    }
-                    async function textHostChat_onClick(event) {
-                        if (chatSession != null) {
-                            console.error('Session is already active. End the session before starting a new one.');
-                            return;
-                        }
-
-                        resetChat();
-
-                        chatSession = createChatSession();
-                        await chatSession.host($textHostDisplayName.value);
-
-                        $textHostButton.setAttribute('disabled', 'disabled');
-                        $textEndButton.removeAttribute('disabled');
-                        $textJoinButton.setAttribute('disabled', 'disabled');
-                        $textLeaveButton.setAttribute('disabled', 'disabled');
-
-                        $chatroom.classList.add('in-session');
-                    }
-                    async function textEndChat_onClick(event) {
-                        if (chatSession == null) {
-                            return;
-                        }
-                        chatSession.ending = true;
-                        await chatSession.close();
-
-                        $textHostButton.removeAttribute('disabled');
-                        $textJoinButton.removeAttribute('disabled');
-                        $textLeaveButton.setAttribute('disabled', 'disabled');
-                        $textEndButton.setAttribute('disabled', 'disabled');
-                    }
-
-                    async function textJoinChat_onClick(event) {
-                        if (chatSession != null) {
-                            console.error('Session is already active. End the session before starting a new one.');
-                            return;
-                        }
-
-                        resetChat();
-
-                        chatSession = createChatSession();
-                        await chatSession.join($textGuestSessionKey.value, $textGuestDisplayName.value);
-
-                        $textJoinButton.setAttribute('disabled', 'disabled');
-                        $textLeaveButton.removeAttribute('disabled');
-                        $textHostButton.setAttribute('disabled', 'disabled');
-                        $textEndButton.setAttribute('disabled', 'disabled');
-
-                        $chatroom.classList.add('in-session');
-                    }
-                    async function textLeaveChat_onClick(event) {
-                        if (chatSession == null) {
-                            return;
-                        }
-                        chatSession.ending = true;
-                        await chatSession.close();
-
-                        $textHostButton.removeAttribute('disabled');
-                        $textJoinButton.removeAttribute('disabled');
-                        $textLeaveButton.setAttribute('disabled', 'disabled');
-                        $textEndButton.setAttribute('disabled', 'disabled');
-                    }
-
-                    async function textChatMessageForm_onSubmit(event) {
-                        event.preventDefault();
-                        event.stopPropagation();
-
-                        if (chatSession == null) {
-                            console.error("No session has been started.");
-                            return false;
-                        }
-
-                        console.log("Sending to server");
-                        addChatMessage({ SenderId: chatSession.token.SocketId, Message: $textChatMessageForm.$value.value });
-                        chatSession.send(JSON.stringify({ Message: $textChatMessageForm.$value.value }));
-
-                        $textChatMessageForm.$value.value = '';
-                        return false;
-                    }
-
-                    function chatSession_OnGreeting(event) {
-                        setSessionState(true);
-                        $sessionKeyCopier.$value.value = event.detail.SessionKey;
-
-                        let introMessage = '';
-                        let hostName = (chatSession.hostToken.DisplayName || 'Host');
-                        if (chatSession.token == chatSession.hostToken) {
-                            introMessage = hostName + " has started a text chat session.";
-                        }
-                        else {
-                            introMessage = `You have joined ${hostName}'s chat.`;
-                        }
-                        $chatroom.$title.textContent = hostName + '\'s text chat';
-                        chatSession.peerTokens[chatSession.token.SocketId] = Object.assign({}, chatSession.token);
-                        clearChatHistory();
-                        updateChatPeers();
-                        $sessionKeyCopier.$copyButton.removeAttribute('disabled');
-
-                        addChatStatus(introMessage);
-                    }
-                    function chatSession_OnPeers(event) {
-                        updateChatPeers();
-
-                        // show messages
-                        let updates = event.detail;
-                        for (let i = 0; i < updates.length; i++) {
-                            let update = updates[i];
-                            for (let j = 0; j < update.Peers.length; j++) {
-                                let peer = update.Peers[j];
-                                let displayName = (peer.DisplayName == '') ? `[${peer.SocketId}]` : peer.DisplayName;
-                                let isHost = peer.SocketId == chatSession.hostToken.SocketId;
-                                if (update.Status == 'connect' && isHost == false) {
-                                    let content = `<div>${displayName} has joined the chat.</div>`;
-                                    let $joinMessage = addChatStatus(content);
-                                }
-                                else if (update.Status == 'disconnect') {
-                                    let action = (isHost == true) ? 'ended' : 'left';
-                                    let content = `<div>${displayName} has ${action} the chat.</div>`;
-                                    let $leaveMessage = addChatStatus(content);
-                                }
-                            }
-                        }
-                    }
-                    function chatSession_OnMessage(event) {
-                        addChatMessage(event.detail);
-                    }
-                    function chatSession_OnClose(event) {
-                        if (chatSession.ending == true) {
-                            let action = (chatSession.token.SocketId == chatSession.hostToken.SocketId) ? 'ended' : 'left';
-                            addChatStatus(`[You have ${action} the chat session.]`);
-                            setSessionState(false);
-                        }
-                        else {
-                            addChatStatus('[The chat session has been ended.]');
-                            setSessionState(false);
-                        }
-                        chatSession = null;
-                    }
-
-                    // functionality
-                    function resetChat() {
-                        setSessionState(false);
-                        clearChatHistory();
-                    }
-
-                    function setSessionState(inSession) {
-                        if (inSession == true) {
-                            $chatroom.classList.add('in-session');
-                            $sessionKeyCopier.$copyButton.removeAttribute('disabled');
-                            $textChatMessageForm.$submit.removeAttribute('disabled');
-                        }
-                        else {
-                            $chatroom.classList.remove('in-session');
-                            $chatroom.$title.textContent = '';
-                            clearChatParticipants();
-                            $textHostErrorMessage.textContent = '';
-                            $textJoinErrorMessage.textContent = '';
-                            $sessionKeyCopier.$value.value = '';
-                            $sessionKeyCopier.$copyButton.setAttribute('disabled', 'disabled');
-                            $textChatMessageForm.$submit.setAttribute('disabled', 'disabled');
-                        }
-                    }
-
-                    function createChatSession() {
-                        let session = new WebsocketSession();
-                        session.addEventListener('greeting', chatSession_OnGreeting);
-                        session.addEventListener('peers', chatSession_OnPeers);
-                        session.addEventListener('message', chatSession_OnMessage);
-                        session.addEventListener('close', chatSession_OnClose);
-                        return session;
-                    }
-
-                    function clearChatHistory() {
-                        while ($chatMessages.lastChild) {
-                            $chatMessages.lastChild.remove();
-                        }
-
-                        if (chatSession == null) {
-                            $chatMessages.appendChild($chatMessages.$noSession);
-                        }
-                    }
-                    function clearChatParticipants() {
-                        while ($peers.$chatPeers.lastChild) {
-                            $peers.$chatPeers.lastChild.remove();
-                        }
-
-                        $peers.classList.remove('others');
-                        $peers.$firstPeer.textContent = '';
-                        $peers.$modifiedCount.textContent = '';
-                    }
-                    function updateChatPeers() {
-                        clearChatParticipants();
-
-                        for (let property in chatSession.peerTokens) {
-
-                            let peer = chatSession.peerTokens[property];
-                            let displayName = (peer.DisplayName == '') ? `[${peer.SocketId}]` : peer.DisplayName;
-                            let $peer = document.createElement('dt');
-                            $peer.classList.add('peer');
-                            if (peer == chatSession.hostToken) {
-                                $peer.classList.add('host');
-                            }
-                            if (peer == chatSession.token) {
-                                $peer.classList.add('self');
-                            }
-                            $peer.textContent = displayName;
-                            $peers.$chatPeers.appendChild($peer);
-                        }
-
-                        let hostName = (chatSession.hostToken.DisplayName || 'Host');
-                        $peers.$firstPeer.textContent = hostName;
-                        $peers.$modifiedCount.textContent = chatSession.peerTokens.length;
-                        if (chatSession.peerTokens.length > 1) {
-                            $peers.classList.add('others');
-                        }
-                    }
-                    function addChatStatus(statusMessage) {
-                        let $message = document.createElement('li');
-                        $message.classList.add('status');
-                        $message.innerHTML = statusMessage;
-
-                        $chatMessages.appendChild($message);
-                        return $message;
-                    }
-                    function addChatMessage(messageData) {
-                        let $message = document.createElement('li');
-                        $message.classList.add('message');
-
-                        let content;
-                        if (Object.prototype.toString.call(messageData) === '[object String]') {
-                            content = `${messageData}`;
-                        }
-                        else {
-                            let peer = (messageData.SenderId == chatSession.token.SocketId) ? chatSession.token : chatSession.peerTokens[messageData.SenderId];
-                            if (peer == null) {
-                                console.error('Unknown Participant. Socket ID: ' + messageData.SenderId);
-                                return;
-                            }
-                            let currentDate = new Date();
-                            let date = (((currentDate.getMonth() + 1) < 10) ? '0' + (currentDate.getMonth() + 1) : (currentDate.getMonth() + 1)) + '/' + ((currentDate.getDate() < 10) ? '0' + currentDate.getDate() : currentDate.getDate()) + '/' + currentDate.getFullYear();
-                            let meridian = 'am';
-                            let hours = currentDate.getHours();
-                            if (hours > 12) {
-                                meridian = 'pm';
-                                hours = currentDate.getHours() - 12;
-                            }
-                            let time = (hours < 10 ? '0' + hours : hours) + ':' + currentDate.getMinutes() + ' ' + meridian;
-                            let userContent = '';
-                            if (peer != chatSession.token) {
-                                userContent = `<span class="user">
-                                                <span class="image-container">
-                                                    ${peer.IconUrl || `<svg class="icon user" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M12 2c2.757 0 5 2.243 5 5.001 0 2.756-2.243 5-5 5s-5-2.244-5-5c0-2.758 2.243-5.001 5-5.001zm0-2c-3.866 0-7 3.134-7 7.001 0 3.865 3.134 7 7 7s7-3.135 7-7c0-3.867-3.134-7.001-7-7.001zm6.369 13.353c-.497.498-1.057.931-1.658 1.302 2.872 1.874 4.378 5.083 4.972 7.346h-19.387c.572-2.29 2.058-5.503 4.973-7.358-.603-.374-1.162-.811-1.658-1.312-4.258 3.072-5.611 8.506-5.611 10.669h24c0-2.142-1.44-7.557-5.631-10.647z" /></svg>`}
-                                                </span>
-                                                <span class="name">${peer.DisplayName || 'Unknown Guest'}</span>
-                                            </span>
-                                            `;
-                            }
-                            else {
-                                $message.classList.add('self');
-                            }
-
-                            content = `${userContent}<div class="body">
-                                        <div class="content">
-                                            ${messageData.Message}
-                                        </div>
-                                        <footer>
-                                            <span class="date">${date}</span>
-                                            <span class="time">${time}</span>
-                                        </footer>
-                                    </div>`;
-                        }
-
-                        $message.innerHTML = content;
-
-                        $chatMessages.appendChild($message);
-
-                        $chatMessages.scrollTop = $chatMessages.scrollHeight - $chatMessages.getBoundingClientRect().height;
-                        return $message;
-                    }
-                }
-            </script>
             <div class="card chat">
                 <header>
                     <h4>Text Chat</h4>
@@ -690,8 +441,8 @@
                                 <div class="peers">
                                 </div>
                                 <!--<div class="messages-container">
-                            <ul id="video-chat-messages"></ul>
-                        </div>-->
+                        <ul id="video-chat-messages"></ul>
+                    </div>-->
                             </aside>
                         </div>
                         <form id="text-chat-message">
@@ -737,6 +488,354 @@
                     <div class="message"></div>
                     <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M13.5 8c.276 0 .5.224.5.5v7c0 .276-.224.5-.5.5h-11c-.276 0-.5-.224-.5-.5v-7c0-.276.224-.5.5-.5h11zm2.5 0c0-1.104-.896-2-2-2h-12c-1.104 0-2 .896-2 2v8c0 1.104.896 2 2 2h12c1.104 0 2-.896 2-2v-8zm6 1.854v4.293l-2-1.408v-1.478l2-1.407zm2-3.854l-6 4.223v3.554l6 4.223v-12z" /></svg>
                 </footer>
+                <script defer type="module">
+                    document.addEventListener('DOMContentLoaded', Init);
+
+                    async function Init() {
+                        // establish a well-known variable
+                        // to hold the websocket session
+                        var chatSession = null;
+
+                        // define well-known html elements
+                        const $chatroom = document.querySelector('.card.chat .chatroom');
+                        $chatroom.$title = $chatroom.querySelector('header > .title');
+
+                        const $sessionKeyCopier = $chatroom.querySelector('.session-key-copier');
+                        $sessionKeyCopier.$value = $sessionKeyCopier.querySelector('.value');
+                        $sessionKeyCopier.$copyButton = $sessionKeyCopier.querySelector('button.copy');
+
+                        const $peers = $chatroom.querySelector('.peers');
+                        $peers.$firstPeer = $peers.querySelector('.first-peer');
+                        $peers.$modifiedCount = $peers.querySelector('.modified-count');
+                        $peers.$chatPeers = $peers.querySelector('dl');
+
+                        const $chatMessages = document.getElementById('chat-messages');
+                        $chatMessages.$noSession = $chatMessages.querySelector('.no-session');
+
+                        const $textChatMessageForm = document.getElementById('text-chat-message');
+                        $textChatMessageForm.$value = $textChatMessageForm.querySelector('input');
+                        $textChatMessageForm.$submit = $textChatMessageForm.querySelector('.submit');
+
+                        const $chatSetup = document.querySelector('.card.chat .setup');
+
+                        const $textHostDisplayName = $chatSetup.querySelector('.choice.host .display-name');
+                        const $textHostButton = $chatSetup.querySelector('.choice.host .action');
+                        const $textEndButton = $chatSetup.querySelector('.choice.host .exit');
+                        const $textHostErrorMessage = $chatSetup.querySelector('.choice.host .message');
+
+                        const $textGuestSessionKey = $chatSetup.querySelector('.display.join .session-key');
+                        const $textGuestDisplayName = $chatSetup.querySelector('.choice.join .display-name');
+                        const $textJoinButton = $chatSetup.querySelector('.choice.join .action');
+                        const $textLeaveButton = $chatSetup.querySelector('.choice.join .exit');
+                        const $textJoinErrorMessage = $chatSetup.querySelector('.choice.join .message');
+
+                        // add functionality
+                        $sessionKeyCopier.$copyButton.addEventListener('click', textCopyButton_onClick);
+                        $textHostButton.addEventListener('click', textHostChat_onClick);
+                        $textEndButton.addEventListener('click', textEndChat_onClick);
+                        $textJoinButton.addEventListener('click', textJoinChat_onClick);
+                        $textLeaveButton.addEventListener('click', textLeaveChat_onClick);
+                        $textChatMessageForm.addEventListener('submit', textChatMessageForm_onSubmit);
+
+                        // prepare page for new chat session
+                        resetChat();
+
+                        // handlers
+                        function textCopyButton_onClick(event) {
+                            if (chatSession == null) {
+                                console.error('Cannot copy session key from session that has not been started.');
+                                return;
+                            }
+                            $sessionKeyCopier.$value.select();
+                            $sessionKeyCopier.$value.setSelectionRange(0, 99999);
+                            document.execCommand('copy');
+                            addChatStatus('Copied the Session Key');
+                        }
+
+                        async function textHostChat_onClick(event) {
+                            if (chatSession != null) {
+                                console.error('Session is already active. End the session before starting a new one.');
+                                return;
+                            }
+
+                            resetChat();
+
+                            chatSession = createChatSession();
+                            await chatSession.host($textHostDisplayName.value);
+
+                            prepareChat();
+
+                            $textHostButton.setAttribute('disabled', 'disabled');
+                            $textEndButton.removeAttribute('disabled');
+                            $textJoinButton.setAttribute('disabled', 'disabled');
+                            $textLeaveButton.setAttribute('disabled', 'disabled');
+
+                            $chatroom.classList.add('in-session');
+                        }
+                        async function textEndChat_onClick(event) {
+                            if (chatSession == null) {
+                                return;
+                            }
+                            chatSession.ending = true;
+                            await chatSession.close();
+
+                            $textHostButton.removeAttribute('disabled');
+                            $textJoinButton.removeAttribute('disabled');
+                            $textLeaveButton.setAttribute('disabled', 'disabled');
+                            $textEndButton.setAttribute('disabled', 'disabled');
+                        }
+
+                        async function textJoinChat_onClick(event) {
+                            if (chatSession != null) {
+                                console.error('Session is already active. End the session before starting a new one.');
+                                return;
+                            }
+
+                            resetChat();
+
+                            chatSession = createChatSession();
+                            await chatSession.join($textGuestSessionKey.value, $textGuestDisplayName.value);
+
+                            prepareChat();
+
+                            $textJoinButton.setAttribute('disabled', 'disabled');
+                            $textLeaveButton.removeAttribute('disabled');
+                            $textHostButton.setAttribute('disabled', 'disabled');
+                            $textEndButton.setAttribute('disabled', 'disabled');
+
+                            $chatroom.classList.add('in-session');
+                        }
+                        async function textLeaveChat_onClick(event) {
+                            if (chatSession == null) {
+                                return;
+                            }
+                            chatSession.ending = true;
+                            await chatSession.close();
+
+                            $textHostButton.removeAttribute('disabled');
+                            $textJoinButton.removeAttribute('disabled');
+                            $textLeaveButton.setAttribute('disabled', 'disabled');
+                            $textEndButton.setAttribute('disabled', 'disabled');
+                        }
+
+                        async function textChatMessageForm_onSubmit(event) {
+                            event.preventDefault();
+                            event.stopPropagation();
+
+                            if (chatSession == null) {
+                                console.error("No session has been started.");
+                                return false;
+                            }
+
+                            console.log("Sending to server");
+                            addChatMessage({ SenderId: chatSession.token.SocketId, Message: $textChatMessageForm.$value.value });
+                            chatSession.send(JSON.stringify({ Message: $textChatMessageForm.$value.value }));
+
+                            $textChatMessageForm.$value.value = '';
+                            return false;
+                        }
+
+                        function chatSession_OnPeers(event) {
+                            updateChatPeers();
+
+                            // show messages
+                            let updates = event.detail;
+                            for (let i = 0; i < updates.length; i++) {
+                                let update = updates[i];
+                                for (let j = 0; j < update.Peers.length; j++) {
+                                    let peer = update.Peers[j];
+                                    let displayName = (peer.DisplayName == '') ? `[${peer.SocketId}]` : peer.DisplayName;
+                                    let isHost = peer.SocketId == chatSession.hostToken.SocketId;
+                                    if (update.Status == 'connect' && isHost == false) {
+                                        let content = `<div>${displayName} has joined the chat.</div>`;
+                                        let $joinMessage = addChatStatus(content);
+                                    }
+                                    else if (update.Status == 'disconnect') {
+                                        let action = (isHost == true) ? 'ended' : 'left';
+                                        let content = `<div>${displayName} has ${action} the chat.</div>`;
+                                        let $leaveMessage = addChatStatus(content);
+                                    }
+                                }
+                            }
+                        }
+                        function chatSession_OnMessage(event) {
+                            addChatMessage(event.detail);
+                        }
+                        function chatSession_OnClose(event) {
+                            if (chatSession.ending == true) {
+                                let action = (chatSession.token.SocketId == chatSession.hostToken.SocketId) ? 'ended' : 'left';
+                                addChatStatus(`[You have ${action} the chat session.]`);
+                                setSessionState(false);
+                            }
+                            else {
+                                addChatStatus('[The chat session has been ended.]');
+                                setSessionState(false);
+                            }
+                            chatSession = null;
+                        }
+
+                        // functionality
+                        function resetChat() {
+                            setSessionState(false);
+                            clearChatHistory();
+                        }
+                        function prepareChat() {
+                            setSessionState(true);
+                            $sessionKeyCopier.$value.value = chatSession.sessionKey;
+
+                            let introMessage = '';
+                            let hostName = (chatSession.hostToken.DisplayName || 'Host');
+                            if (chatSession.token.SocketId == chatSession.hostToken.SocketId) {
+                                introMessage = `You (${hostName}) have started a text chat session.`;
+                            }
+                            else {
+                                introMessage = `You have joined ${hostName}'s chat.`;
+                            }
+                            $chatroom.$title.textContent = hostName + '\'s text chat';
+                            chatSession.peerTokens[chatSession.token.SocketId] = Object.assign({}, chatSession.token);
+                            clearChatHistory();
+                            updateChatPeers();
+
+                            addChatStatus(introMessage);
+
+                            $sessionKeyCopier.$copyButton.removeAttribute('disabled');
+                        }
+
+                        function setSessionState(inSession) {
+                            if (inSession == true) {
+                                $chatroom.classList.add('in-session');
+                                $sessionKeyCopier.$copyButton.removeAttribute('disabled');
+                                $textChatMessageForm.$submit.removeAttribute('disabled');
+                            }
+                            else {
+                                $chatroom.classList.remove('in-session');
+                                $chatroom.$title.textContent = '';
+                                clearChatParticipants();
+                                $textHostErrorMessage.textContent = '';
+                                $textJoinErrorMessage.textContent = '';
+                                $sessionKeyCopier.$value.value = '';
+                                $sessionKeyCopier.$copyButton.setAttribute('disabled', 'disabled');
+                                $textChatMessageForm.$submit.setAttribute('disabled', 'disabled');
+                            }
+                        }
+
+                        function createChatSession() {
+                            let session = new WebsocketSession();
+                            session.addEventListener('peers', chatSession_OnPeers);
+                            session.addEventListener('message', chatSession_OnMessage);
+                            session.addEventListener('close', chatSession_OnClose);
+                            return session;
+                        }
+
+                        function clearChatHistory() {
+                            while ($chatMessages.lastChild) {
+                                $chatMessages.lastChild.remove();
+                            }
+
+                            if (chatSession == null) {
+                                $chatMessages.appendChild($chatMessages.$noSession);
+                            }
+                        }
+                        function clearChatParticipants() {
+                            while ($peers.$chatPeers.lastChild) {
+                                $peers.$chatPeers.lastChild.remove();
+                            }
+
+                            $peers.classList.remove('others');
+                            $peers.$firstPeer.textContent = '';
+                            $peers.$modifiedCount.textContent = '';
+                        }
+                        function updateChatPeers() {
+                            clearChatParticipants();
+
+                            for (let property in chatSession.peerTokens) {
+
+                                let peer = chatSession.peerTokens[property];
+                                let displayName = (peer.DisplayName == '') ? `[${peer.SocketId}]` : peer.DisplayName;
+                                let $peer = document.createElement('dt');
+                                $peer.classList.add('peer');
+                                if (peer == chatSession.hostToken) {
+                                    $peer.classList.add('host');
+                                }
+                                if (peer == chatSession.token) {
+                                    $peer.classList.add('self');
+                                }
+                                $peer.textContent = displayName;
+                                $peers.$chatPeers.appendChild($peer);
+                            }
+
+                            let hostName = (chatSession.hostToken.DisplayName || 'Host');
+                            $peers.$firstPeer.textContent = hostName;
+                            $peers.$modifiedCount.textContent = chatSession.peerTokens.length;
+                            if (chatSession.peerTokens.length > 1) {
+                                $peers.classList.add('others');
+                            }
+                        }
+                        function addChatStatus(statusMessage) {
+                            let $message = document.createElement('li');
+                            $message.classList.add('status');
+                            $message.innerHTML = statusMessage;
+
+                            $chatMessages.appendChild($message);
+                            return $message;
+                        }
+                        function addChatMessage(messageData) {
+                            let $message = document.createElement('li');
+                            $message.classList.add('message');
+
+                            let content;
+                            if (Object.prototype.toString.call(messageData) === '[object String]') {
+                                content = `${messageData}`;
+                            }
+                            else {
+                                let peer = (messageData.SenderId == chatSession.token.SocketId) ? chatSession.token : chatSession.peerTokens[messageData.SenderId];
+                                if (peer == null) {
+                                    console.error('Unknown Participant. Socket ID: ' + messageData.SenderId);
+                                    return;
+                                }
+                                let currentDate = new Date();
+                                let date = (((currentDate.getMonth() + 1) < 10) ? '0' + (currentDate.getMonth() + 1) : (currentDate.getMonth() + 1)) + '/' + ((currentDate.getDate() < 10) ? '0' + currentDate.getDate() : currentDate.getDate()) + '/' + currentDate.getFullYear();
+                                let meridian = 'am';
+                                let hours = currentDate.getHours();
+                                if (hours > 12) {
+                                    meridian = 'pm';
+                                    hours = currentDate.getHours() - 12;
+                                }
+                                let time = (hours < 10 ? '0' + hours : hours) + ':' + currentDate.getMinutes() + ' ' + meridian;
+                                let userContent = '';
+                                if (peer != chatSession.token) {
+                                    userContent = `<span class="user">
+                                                                <span class="image-container">
+                                                                    ${peer.IconUrl || `<svg class="icon user" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M12 2c2.757 0 5 2.243 5 5.001 0 2.756-2.243 5-5 5s-5-2.244-5-5c0-2.758 2.243-5.001 5-5.001zm0-2c-3.866 0-7 3.134-7 7.001 0 3.865 3.134 7 7 7s7-3.135 7-7c0-3.867-3.134-7.001-7-7.001zm6.369 13.353c-.497.498-1.057.931-1.658 1.302 2.872 1.874 4.378 5.083 4.972 7.346h-19.387c.572-2.29 2.058-5.503 4.973-7.358-.603-.374-1.162-.811-1.658-1.312-4.258 3.072-5.611 8.506-5.611 10.669h24c0-2.142-1.44-7.557-5.631-10.647z" /></svg>`}
+                                                                </span>
+                                                                <span class="name">${peer.DisplayName || 'Unknown Guest'}</span>
+                                                            </span>
+                                                            `;
+                                }
+                                else {
+                                    $message.classList.add('self');
+                                }
+
+                                content = `${userContent}<div class="body">
+                                                        <div class="content">
+                                                            ${messageData.Message}
+                                                        </div>
+                                                        <footer>
+                                                            <span class="date">${date}</span>
+                                                            <span class="time">${time}</span>
+                                                        </footer>
+                                                    </div>`;
+                            }
+
+                            $message.innerHTML = content;
+
+                            $chatMessages.appendChild($message);
+
+                            $chatMessages.scrollTop = $chatMessages.scrollHeight - $chatMessages.getBoundingClientRect().height;
+                            return $message;
+                        }
+                    }
+                </script>
             </div>
 
             <div class="card file-upload">

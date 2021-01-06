@@ -83,22 +83,28 @@ namespace SimpleAPI_NetCore50.Websockets
                         sessionSocket.Token.DisplayName = token.DisplayName;
                         sessionSocket.Token.IconUrl = token.IconUrl;
 
-                        Schemas.SocketSessionUpdate[] updates = new Schemas.SocketSessionUpdate[]
+                        if(token.SocketId == hostId)
                         {
-                            new Schemas.SocketSessionUpdate()
+                            // if host, no need to request access; just grant access;
+                            Schemas.SocketSessionUpdate[] updates = new Schemas.SocketSessionUpdate[]
                             {
-                                Status = "connect",
-                                Peers = new Models.SocketToken[1] { sessionSocket.Token }
-                            }
-                        };
+                                new Schemas.SocketSessionUpdate()
+                                {
+                                    Status = "accessgranted",
+                                    Peers = new Models.SocketToken[1] { sessionSocket.Token }
+                                }
+                            };
 
-                        SocketSessionMessageResponse hostAlertResponse = new SocketSessionMessageResponse()
-                        {
-                            MessageType = SocketSessionMessageType.StatusUpdates,
-                            Message = System.Text.Json.JsonSerializer.Serialize(updates)
-                        };
-                        SendMessage(sessionKey, hostId, hostAlertResponse);
-                        return;
+                            SocketSessionMessageResponse hostAlertResponse = new SocketSessionMessageResponse()
+                            {
+                                MessageType = SocketSessionMessageType.StatusUpdates,
+                                Message = System.Text.Json.JsonSerializer.Serialize(updates)
+                            };
+                            SendMessage(sessionKey, hostId, hostAlertResponse);
+                            return;
+                        }
+                        message = messageRequest.Message;
+                        break;
                     case SocketSessionMessageType.StatusUpdates:
                     case SocketSessionMessageType.Text:
                         message = messageRequest.Message;
