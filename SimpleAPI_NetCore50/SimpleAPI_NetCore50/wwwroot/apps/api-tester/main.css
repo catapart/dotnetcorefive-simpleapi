@@ -132,6 +132,22 @@ select
   font: inherit;
 }
 
+/* Set focus to use element's color */
+*:focus
+{
+    --focus-ring-size: 2px;
+    outline: solid var(--focus-ring-size) currentColor;
+    outline-offset: calc(calc(var(--focus-ring-size) * -1) / 2);
+}
+*:focus:focus-visible
+{
+    outline-style: auto;
+}
+*:focus:not(:focus-visible)
+{
+    outline-style: none;
+}
+
 /* Remove all animations and transitions for people that prefer not to see them */
 @media (prefers-reduced-motion: reduce)
 {
@@ -232,12 +248,7 @@ main > .content .card
 main > .content .card.chat
 {
     --theme-gradient: linear-gradient(to bottom, #01aaff, #4372ff);
-    --theme-gradient-reverse: linear-gradient(to top, #01aaff, #4372ff);
-}
-
-main > .content .card.video-chat
-{
-    grid-column: 1/3;
+    --theme-gradient-active: linear-gradient(to bottom, #01aaff, #4372ff 70%);
 }
 
 main > .content .card > header
@@ -247,8 +258,17 @@ main > .content .card > header
     margin-bottom: .5em;
 }
 
+main > .content .card > .content
+{
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+}
+
 main > .content .card .chatroom
 {
+    z-index: 1;
+    opacity: 0;
     margin: .5em;
     padding: 5px;
     background-color: #28282c;
@@ -257,6 +277,19 @@ main > .content .card .chatroom
     border-style: solid;
     border-image: var(--theme-gradient);
     border-image-slice: 1;
+    grid-row-start: 1;
+    grid-column-start: 1;
+    transition: opacity 200ms linear, visibility 200ms linear;
+    user-select: none;
+    pointer-events: none;
+    visibility: hidden;
+}
+main > .content .card .chatroom.in-session
+{
+    opacity: 1;
+    user-select: revert;
+    pointer-events: revert;
+    visibility: visible; /* transition visibility to remove the tabbable elements from the tab flow */
 }
 
 main > .content .card .chatroom > header
@@ -280,38 +313,6 @@ main > .content .card .chatroom > header > .title
     text-overflow:ellipsis;
 }
 
-.session-key-copier
-{
-    display: grid;
-    grid-template-columns: 1fr max-content;
-    grid-template-rows: max-content 1fr;
-    column-gap: .5em;
-    font-size: .8em;
-}
-
-.session-key-copier .description
-{
-    grid-column: 1/2;
-    grid-row-start:1;
-    text-align:right;
-    font-size:.6em;
-}
-
-.session-key-copier .value
-{
-    font-family: Vegur, 'Open Sans', sans-serif;
-    text-align:right;
-    grid-row-start:2;
-    width: 8ch;
-    justify-self: flex-end;
-    user-select:none;
-}
-
-.session-key-copier .copy
-{
-    grid-row:1/3;
-}
-
 main > .content .card .chatroom button
 {
     background: var(--theme-gradient);
@@ -327,7 +328,8 @@ main > .content .card .chatroom button
 main > .content .card .chatroom button:focus
 ,main > .content .card .chatroom button:active
 {
-    background: var(--theme-gradient-reverse);
+    background: var(--theme-gradient-active);
+    outline: solid var(--focus-ring-size) #666;
 }
 main > .content .card .chatroom button[disabled]
 {
@@ -335,14 +337,7 @@ main > .content .card .chatroom button[disabled]
     color: #aaa;
     cursor: not-allowed;
 }
-main > .content .card .chatroom button[disabled] .icon
-{
-    border-right-color: #aaa;
-}
-main > .content .card .chatroom button[disabled] .icon path
-{
-    fill: #aaa;
-}
+
 
 main > .content .card .chatroom button .icon
 {
@@ -350,12 +345,12 @@ main > .content .card .chatroom button .icon
     height: 36px;
     padding-right: .4em;
     margin-right: .5em;
-    border-right: solid 1px #fff;
+    border-right: solid 1px currentColor;
 }
 
 main > .content .card .chatroom button .icon path
 {
-    fill: #fff;
+    fill: currentColor;
 }
 
 main > .content .card .chatroom > .peers
@@ -439,6 +434,39 @@ main > .content .card .chatroom > .display
     border: solid 1px #111;
     font-size: .6em;
     padding: .2em .5em;
+}
+
+#chat-messages .session-key
+{
+    display: flex;
+    align-items: center;
+    font-size: .6em;
+    padding: .3em .9em;
+    background: linear-gradient(to bottom, #282424, #282121);
+    border: solid 1px #111;
+}
+
+#chat-messages .session-key .description
+{
+    margin-right: .2em;
+}
+
+#chat-messages .session-key .value
+{
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    margin-right: 1em;
+    width: 8ch;
+}
+
+#chat-messages .session-key .copy
+{
+    font-family: inherit;
+    padding: .1em 1em;
+    border-radius: 5px;
 }
 
 #chat-messages .message
@@ -529,12 +557,23 @@ main > .content .card .chatroom > form input
 
 main > .content .card .setup
 {
+    z-index: 2;
+    opacity: 1;
     display: grid;
-    grid-template-columns: 1fr 1fr;
     grid-template-columns: 1fr 1fr;
     grid-column-gap: .5em;
     margin: .5em;
     font-family: Vegur, 'Open Sans', sans-serif;
+    grid-row-start: 1;
+    grid-column-start: 1;
+    transition: opacity 200ms linear, visibility 200ms linear;
+}
+main > .content .card .chatroom.in-session ~ .setup
+{
+    opacity:0;
+    user-select: none;
+    pointer-events: none;
+    visibility: hidden; /* transition visibility to remove the tabbable elements from the tab flow */
 }
 
 main > .content .card .setup .option
@@ -553,6 +592,7 @@ main > .content .card .setup .display
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     padding: .5em;
 }
 
@@ -636,7 +676,8 @@ main > .content .card .setup .choice button
 main > .content .card .setup .choice button:active
 ,main > .content .card .setup .choice button:focus
 {
-    background: var(--theme-gradient-reverse);
+    background: var(--theme-gradient-active);
+    outline: solid var(--focus-ring-size) #666;
 }
 main > .content .card .setup .choice button:last-of-type
 {
@@ -663,7 +704,288 @@ main > .content .card > footer
     margin-top: .5em;
 }
 
+main > .content .card.file-upload 
+{
+    --theme-gradient: linear-gradient(to top, #50b984 0%, #89af2c 100%);
+    --theme-gradient-active: linear-gradient(to top, #50b984 30%, #89af2c 100%);
+}
+
+.card.file-upload > .content > .display
+{
+    background: var(--theme-gradient);
+    color: #fff;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding: .5em;
+    margin: .5em;
+    margin-bottom:0;
+}
+
+.card.file-upload > .content > .display svg
+{
+    width: 64px;
+    height: 64px;
+    margin-bottom: .25em;
+}
+
+.card.file-upload > .content > .display svg path
+{
+    fill: #fff;
+}
+
+.card.file-upload > .content > .display .title
+{
+    font-family: Vegur, 'Open Sans', sans-serif;
+}
+
+.card.file-upload > .content > .display .description
+{
+    font-size: .8em;
+    text-align:center;
+}
+
+#file-upload-form
+{
+    background-color:#fff;
+    color:#232323;
+    display: flex;
+    display:grid;
+    grid-template-columns: 1fr;
+    margin: .5em;
+    margin-top:0;
+    padding: 1em;
+}
+
+.field-group.file
+{
+    display: grid;
+    grid-template-columns: min-content 1fr min-content;
+    margin-bottom: 1em;
+    cursor: pointer;
+}
+
+.field-group.file .label
+{
+    grid-column-start:1;
+    grid-column-end:4;
+    font-family: Vegur, 'Open Sans', sans-serif;
+    font-size: .7em;
+}
+
+.field-group.file .icon-container
+{
+    background: var(--theme-gradient);
+    padding: .5em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.field-group.file .icon-container .icon
+{
+    height: 48px;
+    width: 48px;
+}
+
+.field-group.file .icon-container .icon path
+{
+    fill: #fff;
+}
+
+.field-group.file .value-container
+{
+    border-width: 2px;
+    border-style: solid;
+    border-image: var(--theme-gradient);
+    border-image-slice: 1;
+    display: grid;
+    background-color: #fff;
+    border-radius: 0;
+    grid-template-rows:1fr min-content 1fr;
+}
+
+.field-group.file input
+{
+    grid-row-start: 2;
+    background: none;
+    border: none;
+    padding: .2em .5em;
+    color: #232323;
+    font-family: Vegur, 'Open Sans', sans-serif;
+    cursor: pointer;
+}
+.field-group.file input::-webkit-file-upload-button
+{
+    display: none;
+}
+.field-group.file input::file-selector-button
+{
+    display: none;
+}
+
+.field-group.file .clear
+{
+    --size: 30px;
+    width: var(--size);
+    height: var(--size);
+    display: flex;
+    align-items: center;
+    justify-content: center;    height: auto;
+    border-radius: 0;
+}
+
+.field-group.file button
+{
+    background: var(--theme-gradient);
+    border: none;
+    color: #fff;
+    cursor:pointer;
+}
+.field-group.file button:focus
+,.field-group.file button:active
+{
+    background: var(--theme-gradient-active);
+}
+
+.field-group.file button path
+{
+    fill: #fff;
+}
+
+#upload-file
+{
+    background: var(--theme-gradient);
+    color: #fff;
+    border: none;
+    border-radius: 0;
+    padding: .3em 1em;
+    cursor: pointer;
+}
+#upload-file:focus,
+#upload-file:active
+{
+    background: var(--theme-gradient-active);
+}
+
+{
+    background: var(--theme-gradient-active);
+}
+#upload-file[disabled]
+{
+    background: linear-gradient(to bottom, #eee, #ddd);
+    color: #aaa;
+    cursor: not-allowed;
+}
+#upload-file[disabled] .icon
+{
+    border-right-color: #aaa;
+}
+#upload-file[disabled] .icon path
+{
+    fill: #aaa;
+}
+
+#upload-file + .divider
+{
+    margin: 1em 0;
+    background: #aaa;
+    height: 1px;
+}
+
+#file-upload-form > .progress-controls
+{
+    display: flex;
+    margin-bottom: .5em;
+}
+
+#file-upload-form > .progress-controls button
+{
+    background: linear-gradient(to top, #e53935, #e35d5b);
+    color: #8a0000;
+    border-radius: 0px;
+    min-width: 32px;
+    border:none;
+    cursor: pointer;
+    display: flex;
+    align-items:center;
+    padding: .1em .4em;
+    font-size: .5em;
+}
+#file-upload-form > .progress-controls button:focus
+,#file-upload-form > .progress-controls button:active
+{
+    background: linear-gradient(to top, #e53935 60%, #e35d5b);
+    outline: solid var(--focus-ring-size) #666;
+}
+#file-upload-form > .progress-controls button[disabled]
+{
+    background: linear-gradient(to bottom, #eee, #ddd);
+    color: #aaa;
+    cursor: not-allowed;
+}
+/*#file-upload-form > .progress-controls button[disabled] .icon
+{
+    border-right-color: currentColor;
+}
+#file-upload-form > .progress-controls button[disabled] .icon path
+{
+    fill: currentColor;
+}*/
+
+#file-upload-form > .progress-controls button .icon
+{
+    width: 24px;
+    height: 24px;
+    padding-right: .4em;
+    margin-right: .5em;
+    border-right: solid 1px currentColor;
+}
+
+#file-upload-form > .progress-controls button .icon path
+{
+    fill: currentColor;
+}
+
+
+
+#upload-progress
+{
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #eee;
+    border-radius: 0;
+    width: inherit;
+    margin-right: .5em;
+    height: auto;
+}
+
+#upload-progress::-webkit-progress-bar
+{
+    background: #eee;
+}
+
+#upload-progress::-webkit-progress-value
+{
+    background: var(--theme-gradient);
+}
+#upload-progress::-moz-progress-bar
+{
+    background: var(--theme-gradient);
+}
+
+#file-upload-form > .message
+{
+    margin: 1em;
+    margin-top:0;
+    text-align:right;
+}
+
+
 main > .content .card.video-chat
 {
     grid-column: 1/3;
+    --theme-gradient: linear-gradient(to bottom, #ab3f84 0%, #5e29a0 100%);
 }

@@ -42,6 +42,13 @@ namespace SimpleAPI_NetCore50.Controllers
         public async Task<IActionResult> UploadFile(string sessionKey)
         {
             FileMap fileMap =  await ProgressSessionService.StreamFileToServer(HttpContext.Request, ModelState, Logger, sessionKey);
+            fileMap.UnadjustedDisplayFilename = fileMap.FilenameForDisplay;
+
+            FileMap[] existingMaps = DatabaseContext.FileMaps.Where(map => map.UnadjustedDisplayFilename == fileMap.UnadjustedDisplayFilename).ToArray();
+            if(existingMaps == null || existingMaps.Length > 0)
+            {
+                fileMap.FilenameForDisplay = AddSuffixToFilename(fileMap.FilenameForDisplay, existingMaps.Length.ToString());
+            }
 
             DatabaseContext.FileMaps.Add(fileMap);
             try
@@ -61,6 +68,27 @@ namespace SimpleAPI_NetCore50.Controllers
             }
 
             return CreatedAtAction(nameof(UploadFile), new { filePath = fileMap.FilenameForDisplay });
+        }
+
+        [HttpGet("progress/{sessionKey}/cancel")]
+        public async Task<IActionResult> CancelUpload(string sessionKey)
+        {
+            ProgressSessionService.CancelUpload(sessionKey);
+
+            return AcceptedAtAction(nameof(CancelUpload));
+        }
+
+        private string AddSuffixToFilename(string fileName, string suffix)
+        {
+            string baseName = Path.GetFileNameWithoutExtension(fileName);
+            string extension = Path.GetExtension(fileName);
+            StringBuilder stringBuilder = new StringBuilder();
+            stringBuilder.Append(baseName);
+            stringBuilder.Append("(");
+            stringBuilder.Append(suffix);
+            stringBuilder.Append(")");
+            stringBuilder.Append(extension);
+            return stringBuilder.ToString();
         }
     }
 }

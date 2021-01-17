@@ -39,6 +39,11 @@
             Name = name;
             Data = value;
         }
+
+        public void SetData(ValueT value)
+        {
+            Data = value;
+        }
     }
 
     public static class SessionAttribute

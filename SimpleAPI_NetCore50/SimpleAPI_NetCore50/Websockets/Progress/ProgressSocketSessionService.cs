@@ -29,7 +29,6 @@ namespace SimpleAPI_NetCore50.Websockets
 
         public async override Task<SessionSocket> JoinSession(HttpContext context, string sessionType, string sessionKey)
         {
-
             SocketSession targetSession = GetSessionByKey(sessionKey);
             if (targetSession == null)
             {
@@ -45,6 +44,15 @@ namespace SimpleAPI_NetCore50.Websockets
 
             SessionSocket sessionSocket = targetSession.AddWebSocket(socket);
             targetSession.SetAttribute("hostId", sessionSocket.Token.SocketId);
+
+            // alert requester of their own token
+            Models.SocketToken hostToken = sessionSocket.Token;
+            Schemas.SocketSessionMessageResponse response = new Schemas.SocketSessionMessageResponse()
+            {
+                MessageType = Schemas.SocketSessionMessageType.Greeting,
+                Message = System.Text.Json.JsonSerializer.Serialize(new { SessionKey = sessionKey, HostToken = hostToken, Token = sessionSocket.Token })
+            };
+            SendMessage(sessionSocket, response);
 
             return sessionSocket;
         }
@@ -88,6 +96,11 @@ namespace SimpleAPI_NetCore50.Websockets
                 Message = System.Text.Json.JsonSerializer.Serialize(updates)
             };
             SendMessage(sessionKey, hostId, updateResponse);
+        }
+
+        public void CancelUpload(string sessionKey)
+        {
+            this.FileService.CancelUpload(this, sessionKey);
         }
     }
 }
