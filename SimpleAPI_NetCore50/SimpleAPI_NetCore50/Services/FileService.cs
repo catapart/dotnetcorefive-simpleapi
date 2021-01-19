@@ -82,7 +82,7 @@ namespace SimpleAPI_NetCore50.Services
             string filenameOnDisk = "";
             string fileContentType = "";
 
-            SocketSession targetSession = sessionService.GetSessionByKey(sessionKey);
+            WebsocketSession targetSession = sessionService.GetSessionByKey(sessionKey);
             if (targetSession == null)
             {
                 modelState.AddModelError("File", "The requested session could not be found.");
@@ -154,7 +154,7 @@ namespace SimpleAPI_NetCore50.Services
             return new Models.FileMap() { FilenameForDisplay = filenameForDisplay, FilenameOnDisk = filenameOnDisk, ContentType = fileContentType };
         }
 
-        public async Task SaveFileToDiskWithProgress(MultipartSection section, ContentDispositionHeaderValue contentDisposition, ModelStateDictionary modelState, string filepath, string[] permittedExtensions, long sizeLimit, ProgressSocketSessionService sessionService, SocketSession targetSession, int totalBytes)
+        public async Task SaveFileToDiskWithProgress(MultipartSection section, ContentDispositionHeaderValue contentDisposition, ModelStateDictionary modelState, string filepath, string[] permittedExtensions, long sizeLimit, ProgressSocketSessionService sessionService, WebsocketSession targetSession, int totalBytes)
         {
             using (FileStream stream = new FileStream(filepath, FileMode.Create, System.IO.FileAccess.Write))
             {
@@ -180,7 +180,7 @@ namespace SimpleAPI_NetCore50.Services
 
         public void CancelUpload(ProgressSocketSessionService sessionService, string sessionKey)
         {
-            SocketSession targetSession = sessionService.GetSessionByKey(sessionKey);
+            WebsocketSession targetSession = sessionService.GetSessionByKey(sessionKey);
             if (targetSession == null)
             {
                 throw new Exception("The requested session could not be found.");
@@ -190,7 +190,7 @@ namespace SimpleAPI_NetCore50.Services
 
         }
 
-        private async Task CopyToStreamWithProgress(Stream source, Stream destination, ProgressSocketSessionService sessionService, SocketSession targetSession, int totalBytes = -1, string stepId = "", CancellationToken cancellationToken = default(CancellationToken), int bufferSize = 0x1000)
+        private async Task CopyToStreamWithProgress(Stream source, Stream destination, ProgressSocketSessionService sessionService, WebsocketSession targetSession, int totalBytes = -1, string stepId = "", CancellationToken cancellationToken = default(CancellationToken), int bufferSize = 0x1000)
         {
             byte[] buffer = new byte[bufferSize];
             int currentBytesRead;

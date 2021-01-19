@@ -7,13 +7,14 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using System.Net.WebSockets;
+using SimpleAPI_NetCore50.Websockets;
 
 namespace SimpleAPI_NetCore50.Websockets
 {
-    public class VideoSocketMiddleware : SocketMiddleware
+    public class VideoSocketMiddleware : WebsocketSessionMiddleware
     {
 
-        public VideoSocketMiddleware(RequestDelegate next, ILogger<SocketMiddleware> logger, VideoSocketSessionService socketSessionService) : base(next, logger, socketSessionService)
+        public VideoSocketMiddleware(RequestDelegate next, ILogger<WebsocketSessionMiddleware> logger, VideoSocketSessionService socketSessionService) : base(next, logger, socketSessionService)
         {
 
         }
@@ -48,7 +49,7 @@ namespace SimpleAPI_NetCore50.Websockets
                 else if (result.MessageType == WebSocketMessageType.Close)
                 {
 
-                    SocketSession targetSession = SessionService.GetSessionByKey(sessionKey);
+                    WebsocketSession targetSession = SessionService.GetSessionByKey(sessionKey);
                     string hostId = targetSession.GetAttributeValue<string>("hostId");
 
                     // if the host quit, kill the session

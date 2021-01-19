@@ -44,9 +44,8 @@
 
                 this.domain = new URL(window.location).host;
 
-                this._sessionType = type || 'stream';
+                this._sessionType = type || 'messaging';
                 this._sessionType = this._sessionType.toLowerCase();
-                this._websocketKey = (this._sessionType == 'stream') ? 'video' : 'progress';
                 this.unitTotal = unitTotal || -1;
 
                 this.socket = null;
@@ -68,12 +67,12 @@
                 let response = await fetch(`https://${this.domain}/api/websocket/${this._sessionType}${(this.unitTotal > -1) ? '/' + this.unitTotal : ''}`);
                 let sessionKey = await response.text();
                 console.log("Established new websocket session: ", sessionKey);
-                let url = `wss://${this.domain}/${this._websocketKey}/${sessionKey}`;
+                let url = `wss://${this.domain}/${this._sessionType}/${sessionKey}`;
 
                 return this.connect(url, displayName, iconUrl, handlers);
             }
             async join(sessionKey, displayName, iconUrl, handlers) {
-                let url = `wss://${this.domain}/${this._websocketKey}/${sessionKey}`;
+                let url = `wss://${this.domain}/${this._sessionType}/${sessionKey}`;
                 return this.connect(url, displayName, iconUrl, handlers);
             }
 
@@ -232,7 +231,7 @@
                 this.token = greeting.Token;
                 this.hostToken = greeting.HostToken;
 
-                if (this._sessionType == 'stream') {
+                if (this._sessionType == 'messaging') {
                     this.updatePeers(greeting.Peers);
 
                     this.makeIntroduction();

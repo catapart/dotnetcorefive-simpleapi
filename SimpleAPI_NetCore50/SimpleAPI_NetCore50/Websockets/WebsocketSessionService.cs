@@ -9,50 +9,68 @@ using Microsoft.Extensions.Configuration;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using SimpleAPI_NetCore50.Schemas;
 
 namespace SimpleAPI_NetCore50.Websockets
 {
-    public class SocketSessionService
+    public class WebsocketSessionService
     {
         protected readonly IConfiguration AppConfig;
-        private ConcurrentDictionary<string, SocketSession> Sessions = new ConcurrentDictionary<string, SocketSession>();
-        private ConcurrentDictionary<string, ISessionAttribute[]> PreparedSessions = new ConcurrentDictionary<string, ISessionAttribute[]>();
+        private ConcurrentDictionary<string, WebsocketSession> Sessions = new ConcurrentDictionary<string, WebsocketSession>();
+        private ConcurrentDictionary<string, IProcessArtifact[]> PreparedSessions = new ConcurrentDictionary<string, IProcessArtifact[]>();
         protected readonly Services.FileService FileService;
 
-        public SocketSessionService(IConfiguration configuration, Services.FileService fileService)
+        public WebsocketSessionService(IConfiguration configuration, Services.FileService fileService)
         {
             AppConfig = configuration;
             FileService = fileService;
         }
 
-        public SocketSession GetSessionByKey(string key)
+        public WebsocketSession GetSessionByKey(string key)
         {
             return Sessions.FirstOrDefault(pair => pair.Key == key).Value;
         }
-        public ConcurrentDictionary<string, SocketSession> GetAll()
+        public ConcurrentDictionary<string, WebsocketSession> GetAll()
         {
             return Sessions;
         }
 
-        public virtual string GetKey(SocketSession session)
+        public virtual string GetKey(WebsocketSession session)
         {
             return Sessions.FirstOrDefault(pair => pair.Value == session).Key;
         }
-        public KeyValuePair<string, ISessionAttribute[]> GetPreparedSession(string key)
+        public KeyValuePair<string, IProcessArtifact[]> GetPreparedSession(string key)
         {
             return PreparedSessions.FirstOrDefault(pair => pair.Key == key);
         }
 
-        public virtual string PrepareNewSession(params ISessionAttribute[] attributes)
+        public virtual string PrepareNewSession(params IProcessArtifact[] attributes)
         {
             string sessionKey = CreateSessionKey();
             PreparedSessions.TryAdd(sessionKey, attributes);
             return sessionKey;
         }
 
+        //public virtual async Task<SessionSocket> JoinSession(HttpContext context, string sessionType, string sessionKey)
+        //{
+        //    WebsocketSession targetSession = GetSessionByKey(sessionKey);
+        //    if (targetSession == null)
+        //    {
+        //        targetSession = this.CreateSession(sessionType, sessionKey);
+        //    }
+
+        //    WebSocket socket = await context.WebSockets.AcceptWebSocketAsync();
+
+        //    SessionSocket sessionSocket = targetSession.AddWebSocket(socket);
+
+
+        //    return sessionSocket;
+        //}
+
         public virtual async Task<SessionSocket> JoinSession(HttpContext context, string sessionType, string sessionKey)
         {
-            SocketSession targetSession = GetSessionByKey(sessionKey);
+
+            WebsocketSession targetSession = GetSessionByKey(sessionKey);
             if (targetSession == null)
             {
                 targetSession = this.CreateSession(sessionType, sessionKey);
@@ -62,22 +80,42 @@ namespace SimpleAPI_NetCore50.Websockets
 
             SessionSocket sessionSocket = targetSession.AddWebSocket(socket);
 
+            string hostId = sessionSocket.Token.SocketId;
+            if (targetSession.GetSockets().Count == 1)
+            {
+                targetSession.SetAttribute("hostId", hostId);
+            }
+            else
+            {
+                hostId = targetSession.GetAttributeValue<string>("hostId");
+            }
+
+            // alert requester of their own token, the hosts token and other existing peers
+            Models.SocketToken hostToken = targetSession.GetSocketById(hostId).Token;
+            Models.SocketToken[] participants = targetSession.GetSockets().Where(pair => pair.Value.Token.SocketId != sessionSocket.Token.SocketId).Select(pair => pair.Value.Token).ToArray();
+
+            SocketSessionMessageResponse response = new SocketSessionMessageResponse()
+            {
+                MessageType = SocketSessionMessageType.Greeting,
+                Message = System.Text.Json.JsonSerializer.Serialize(new { SessionKey = sessionKey, HostToken = hostToken, Token = sessionSocket.Token, Peers = participants })
+            };
+            SendMessage(sessionSocket, response);
 
             return sessionSocket;
         }
 
-        protected virtual SocketSession CreateSession(string sessionType, string sessionKey)
+        protected virtual WebsocketSession CreateSession(string sessionType, string sessionKey)
         {
 
-            KeyValuePair<string, ISessionAttribute[]> preparedSession = GetPreparedSession(sessionKey);
-            if (preparedSession.Equals(default(KeyValuePair<string, ISessionAttribute[]>)))
+            KeyValuePair<string, IProcessArtifact[]> preparedSession = GetPreparedSession(sessionKey);
+            if (preparedSession.Equals(default(KeyValuePair<string, IProcessArtifact[]>)))
             {
                 throw new Exception("Unknown Session: " + sessionKey);
             }
 
-            SocketSession targetSession = new SocketSession();
+            WebsocketSession targetSession = new WebsocketSession();
             targetSession.SessionKey = sessionKey;
-            targetSession.SessionType = SocketSession.GetSessionType(sessionType);
+            targetSession.SessionType = WebsocketSession.GetSessionType(sessionType);
             Sessions.TryAdd(sessionKey, targetSession);
             targetSession.SetAttributes(preparedSession.Value);
 
@@ -88,14 +126,14 @@ namespace SimpleAPI_NetCore50.Websockets
 
         public virtual async Task EndSession(string sessionKey)
         {
-            SocketSession session = GetSessionByKey(sessionKey);
+            WebsocketSession session = GetSessionByKey(sessionKey);
             await session.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closed by the Session Service.", CancellationToken.None);
 
-            SocketSession removedSession;
+            WebsocketSession removedSession;
             Sessions.TryRemove(sessionKey, out removedSession);
 
-            KeyValuePair<string, ISessionAttribute[]> preparedSession = GetPreparedSession(sessionKey);
-            if (!preparedSession.Equals(default(KeyValuePair<string, ISessionAttribute[]>)))
+            KeyValuePair<string, IProcessArtifact[]> preparedSession = GetPreparedSession(sessionKey);
+            if (!preparedSession.Equals(default(KeyValuePair<string, IProcessArtifact[]>)))
             {
                 PreparedSessions.TryRemove(preparedSession);
             }
@@ -123,7 +161,7 @@ namespace SimpleAPI_NetCore50.Websockets
         }
         public async Task SendMessage(string sessionKey, string socketId, string message)
         {
-            SocketSession socketSession = this.GetSessionByKey(sessionKey);
+            WebsocketSession socketSession = this.GetSessionByKey(sessionKey);
             if (socketSession == null)
             {
                 throw new Exception("Unknown Session requested: " + sessionKey);
@@ -145,7 +183,7 @@ namespace SimpleAPI_NetCore50.Websockets
         public async Task SendMessage(string sessionKey, IEnumerable<string> socketIds, string message)
         {
 
-            SocketSession socketSession = this.GetSessionByKey(sessionKey);
+            WebsocketSession socketSession = this.GetSessionByKey(sessionKey);
             if (socketSession == null)
             {
                 throw new Exception("Unknown Session requested: " + sessionKey);
@@ -167,7 +205,7 @@ namespace SimpleAPI_NetCore50.Websockets
         public async Task SendMessage(string sessionKey, IEnumerable<WebSocket> sockets, string message)
         {
             List<Task> tasks = new List<Task>();
-            SocketSession socketSession = this.GetSessionByKey(sessionKey);
+            WebsocketSession socketSession = this.GetSessionByKey(sessionKey);
             if (socketSession == null)
             {
                 throw new Exception("Unknown Session requested: " + sessionKey);
@@ -192,7 +230,7 @@ namespace SimpleAPI_NetCore50.Websockets
             List<Task> tasks = new List<Task>();
             foreach (string sessionKey in sessionKeys)
             {
-                SocketSession socketSession = this.GetSessionByKey(sessionKey);
+                WebsocketSession socketSession = this.GetSessionByKey(sessionKey);
                 if (socketSession == null)
                 {
                     throw new Exception("Unknown Session requested: " + sessionKey);
@@ -219,7 +257,7 @@ namespace SimpleAPI_NetCore50.Websockets
             List<Task> tasks = new List<Task>();
             foreach (string sessionKey in sessionKeys)
             {
-                SocketSession socketSession = this.GetSessionByKey(sessionKey);
+                WebsocketSession socketSession = this.GetSessionByKey(sessionKey);
                 if (socketSession == null)
                 {
                     throw new Exception("Unknown Session requested: " + sessionKey);
@@ -250,7 +288,7 @@ namespace SimpleAPI_NetCore50.Websockets
         }
         public virtual async Task SendMessageToPeers(string sessionKey, string sendingSocketId, string message)
         {
-            SocketSession socketSession = this.GetSessionByKey(sessionKey);
+            WebsocketSession socketSession = this.GetSessionByKey(sessionKey);
             if (socketSession == null)
             {
                 throw new Exception("Unknown Session requested: " + sessionKey);
@@ -286,7 +324,7 @@ namespace SimpleAPI_NetCore50.Websockets
         }
         public virtual async Task SendMessageToAll(string sessionKey, string message)
         {
-            SocketSession socketSession = this.GetSessionByKey(sessionKey);
+            WebsocketSession socketSession = this.GetSessionByKey(sessionKey);
             if (socketSession == null)
             {
                 throw new Exception("Unknown Session requested: " + sessionKey);
@@ -302,7 +340,7 @@ namespace SimpleAPI_NetCore50.Websockets
         }
         public virtual async Task SendMessageToPeers(string sessionKey, WebSocket socket, string message)
         {
-            SocketSession socketSession = this.GetSessionByKey(sessionKey);
+            WebsocketSession socketSession = this.GetSessionByKey(sessionKey);
             if (socketSession == null)
             {
                 throw new Exception("Unknown Session requested: " + sessionKey);
@@ -317,12 +355,104 @@ namespace SimpleAPI_NetCore50.Websockets
             }
         }
 
+        //public virtual async Task ReceiveMessage(string sessionKey, SessionSocket sessionSocket, WebSocketReceiveResult result, byte[] buffer)
+        //{
+        //    // intentionally blank
+        //    // you don't have to do anything with messages you get from the client
+        //    // but if you need to, you can override this function. Otherwise it's
+        //    // just an empty execution.
+        //}
+
+
         public virtual async Task ReceiveMessage(string sessionKey, SessionSocket sessionSocket, WebSocketReceiveResult result, byte[] buffer)
         {
-            // intentionally blank
-            // you don't have to do anything with messages you get from the client
-            // but if you need to, you can override this function. Otherwise it's
-            // just an empty execution.
+            try
+            {
+                WebsocketSession socketSession = GetSessionByKey(sessionKey);
+                List<SocketSessionMessageResponse> messages = socketSession.GetAttributeValue<List<SocketSessionMessageResponse>>("messages");
+
+                string serializedMessage = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                SocketSessionMessageRequest messageRequest = System.Text.Json.JsonSerializer.Deserialize<SocketSessionMessageRequest>(serializedMessage);
+                if (messageRequest.Type == SocketSessionMessageType.Unknown)
+                {
+                    messageRequest.Type = SocketSessionMessageType.Text;
+                }
+
+                string socketId = sessionSocket.Token.SocketId;
+                string displayName = sessionSocket.Token.DisplayName;
+
+                string message = "";
+                switch (messageRequest.Type)
+                {
+                    case SocketSessionMessageType.Introduction:
+                        string hostId = socketSession.GetAttributeValue<string>("hostId");
+                        Models.SocketToken token = System.Text.Json.JsonSerializer.Deserialize<Models.SocketToken>(messageRequest.Message);
+                        sessionSocket.Token.DisplayName = token.DisplayName;
+                        sessionSocket.Token.IconUrl = token.IconUrl;
+
+                        if (token.SocketId == hostId)
+                        {
+                            // if host, no need to request access; just grant access;
+                            Schemas.SocketSessionUpdate[] updates = new Schemas.SocketSessionUpdate[]
+                            {
+                                new Schemas.SocketSessionUpdate()
+                                {
+                                    Status = "accessgranted",
+                                    Peers = new Models.SocketToken[1] { sessionSocket.Token }
+                                }
+                            };
+
+                            SocketSessionMessageResponse hostAlertResponse = new SocketSessionMessageResponse()
+                            {
+                                MessageType = SocketSessionMessageType.StatusUpdates,
+                                Message = System.Text.Json.JsonSerializer.Serialize(updates)
+                            };
+                            SendMessage(sessionKey, hostId, hostAlertResponse);
+                            return;
+                        }
+                        message = messageRequest.Message;
+                        break;
+                    case SocketSessionMessageType.StatusUpdates:
+                    case SocketSessionMessageType.Text:
+                        message = messageRequest.Message;
+                        break;
+                    case SocketSessionMessageType.Reaction:
+                        if (messageRequest.TargetMessageId == null)
+                        {
+                            throw new Exception("Reaction must provide TargetMessageId value.");
+                        }
+                        break;
+                    default:
+                        throw new Exception("Unknown Message Type: " + messageRequest.Type);
+                }
+
+                SocketSessionMessageResponse messageResponse = new Schemas.SocketSessionMessageResponse()
+                {
+                    MessageId = messages.Count,
+                    MessageType = messageRequest.Type,
+                    Message = message,
+                    SenderId = sessionSocket.Token.SocketId,
+                    Recipients = messageRequest.Recipients
+                };
+
+                messages.Add(messageResponse);
+
+                if (messageRequest.Recipients == null || messageRequest.Recipients.Length == 0)
+                {
+                    SendMessageToPeers(sessionKey, socketId, messageResponse);
+                }
+                else
+                {
+                    SendMessage(sessionKey, messageRequest.Recipients, messageResponse);
+                }
+            }
+            catch (Exception exception)
+            {
+                Schemas.SocketError error = new Schemas.SocketError() { ErrorCode = "WP_002", Message = "An error occurred while processing the message" };
+                SendMessage(sessionSocket.Socket, error);
+            }
+
+
         }
 
         private static string CreateSessionKey()

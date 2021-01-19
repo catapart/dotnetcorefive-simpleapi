@@ -10,10 +10,10 @@ using System.Net.WebSockets;
 
 namespace SimpleAPI_NetCore50.Websockets
 {
-    public class ProgressSocketMiddleware : SocketMiddleware
+    public class ProgressSocketMiddleware : WebsocketSessionMiddleware
     {
 
-        public ProgressSocketMiddleware(RequestDelegate next, ILogger<SocketMiddleware> logger, ProgressSocketSessionService socketSessionService) : base(next, logger, socketSessionService)
+        public ProgressSocketMiddleware(RequestDelegate next, ILogger<WebsocketSessionMiddleware> logger, ProgressSocketSessionService socketSessionService) : base(next, logger, socketSessionService)
         {
 
         }

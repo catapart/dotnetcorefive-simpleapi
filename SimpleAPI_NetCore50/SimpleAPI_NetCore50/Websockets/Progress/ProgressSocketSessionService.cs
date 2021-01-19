@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace SimpleAPI_NetCore50.Websockets
 {
-    public class ProgressSocketSessionService : SocketSessionService
+    public class ProgressSocketSessionService : WebsocketSessionService
     {
         public readonly long FileSizeLimit;
         public readonly string[] PermittedExtensions = { ".txt" };
@@ -29,7 +29,7 @@ namespace SimpleAPI_NetCore50.Websockets
 
         public async override Task<SessionSocket> JoinSession(HttpContext context, string sessionType, string sessionKey)
         {
-            SocketSession targetSession = GetSessionByKey(sessionKey);
+            WebsocketSession targetSession = GetSessionByKey(sessionKey);
             if (targetSession == null)
             {
                 targetSession = this.CreateSession(sessionType, sessionKey);
@@ -88,7 +88,7 @@ namespace SimpleAPI_NetCore50.Websockets
                 }
             };
 
-            SocketSession socketSession = GetSessionByKey(sessionKey);
+            WebsocketSession socketSession = GetSessionByKey(sessionKey);
             string hostId = socketSession.GetAttributeValue<string>("hostId");
             Schemas.SocketSessionMessageResponse updateResponse = new Schemas.SocketSessionMessageResponse()
             {

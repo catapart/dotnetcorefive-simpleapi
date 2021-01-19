@@ -10,18 +10,16 @@ namespace SimpleAPI_NetCore50.Websockets
 {
     public enum WebsocketSessionType
     {
-        Unknown,
+        Messaging,
         Progress,
-        Message,
-        Stream
     }
 
-    public class SocketSession
+    public class WebsocketSession
     {
         public WebsocketSessionType SessionType;
         public string SessionKey;
         private ConcurrentDictionary<string, SessionSocket> Sockets = new ConcurrentDictionary<string, SessionSocket>();
-        private ConcurrentDictionary<string, ISessionAttribute> Attributes = new ConcurrentDictionary<string, ISessionAttribute>();
+        private ConcurrentDictionary<string, IProcessArtifact> Attributes = new ConcurrentDictionary<string, IProcessArtifact>();
 
         public static WebsocketSessionType GetSessionType(string typeName)
         {
@@ -29,16 +27,7 @@ namespace SimpleAPI_NetCore50.Websockets
             {
                 return WebsocketSessionType.Progress;
             }
-            if (String.Equals(typeName, "message", StringComparison.CurrentCultureIgnoreCase))
-            {
-                return WebsocketSessionType.Message;
-            }
-            if (String.Equals(typeName, "stream", StringComparison.CurrentCultureIgnoreCase))
-            {
-                return WebsocketSessionType.Stream;
-            }
-
-            return WebsocketSessionType.Unknown;
+            return WebsocketSessionType.Messaging;
         }
 
         public SessionSocket GetSocketById(string id)
@@ -88,26 +77,26 @@ namespace SimpleAPI_NetCore50.Websockets
 
         public T GetAttributeValue<T>(string name)
         {
-            ISessionAttribute attribute = this.Attributes[name];
+            IProcessArtifact attribute = this.Attributes[name];
             object value = attribute.Data;
             return (T) value;
         }
         public object GetAttributeValue(string name)
         {
-            ISessionAttribute attribute = this.Attributes[name];
+            IProcessArtifact attribute = this.Attributes[name];
             var value = Convert.ChangeType(attribute.Data, attribute.DataType);
 
             return value;
         }
-        public ConcurrentDictionary<string, ISessionAttribute> GetAttributePairs()
+        public ConcurrentDictionary<string, IProcessArtifact> GetAttributePairs()
         {
             return this.Attributes;
         }
-        public ISessionAttribute GetAttribute(string name)
+        public IProcessArtifact GetAttribute(string name)
         {
             return this.Attributes[name];
         }
-        public ConcurrentDictionary<string, ISessionAttribute> GetAttributes()
+        public ConcurrentDictionary<string, IProcessArtifact> GetAttributes()
         {
             return this.Attributes;
         }
@@ -115,9 +104,9 @@ namespace SimpleAPI_NetCore50.Websockets
         {
             this.AddOrUpdateAttribute(name, value);
         }
-        public void SetAttributes(IEnumerable<ISessionAttribute> attributes)
+        public void SetAttributes(IEnumerable<IProcessArtifact> attributes)
         {
-            foreach (ISessionAttribute attribute in attributes)
+            foreach (IProcessArtifact attribute in attributes)
             {
                 this.AddOrUpdateAttribute(attribute.Name, attribute.Data);
             }
@@ -130,7 +119,7 @@ namespace SimpleAPI_NetCore50.Websockets
 
         private void AddOrUpdateAttribute(string name, object value)
         {
-            ISessionAttribute attribute = null;
+            IProcessArtifact attribute = null;
 
             try
             {
@@ -143,7 +132,7 @@ namespace SimpleAPI_NetCore50.Websockets
                 this.Attributes.TryRemove(name, out attribute); // delete existing attribute to remake it; simpler than updating generic types;
             }
 
-            this.Attributes.TryAdd(name, SessionAttribute.Create(name, value));
+            this.Attributes.TryAdd(name, ProcessArtifact.Create(name, value));
         }
     }
 }

@@ -35,13 +35,17 @@ namespace SimpleAPI_NetCore50
         public void ConfigureServices(IServiceCollection services)
         {
 
-            services.AddTransient<Websockets.SocketSession>(); // ephemeral sessions
+            services.AddTransient<Websockets.WebsocketSession>(); // ephemeral sessions
             foreach (var type in Assembly.GetEntryAssembly().ExportedTypes)
             {
-                if (type.GetTypeInfo().BaseType == typeof(Websockets.SocketSessionService))
+                // this loop won't register the base type; only implementers;
+                if (type.GetTypeInfo().BaseType == typeof(Websockets.WebsocketSessionService))
                 {
                     services.AddSingleton(type); // long-lived management services
                 }
+
+                // so we register the base type explicitly;
+                services.AddSingleton<Websockets.WebsocketSessionService>();
             }
 
             services.AddSingleton<Services.FileService>();
@@ -110,8 +114,9 @@ namespace SimpleAPI_NetCore50
             var serviceProvider = serviceScopeFactory.CreateScope().ServiceProvider;
 
             app.UseWebSockets();
+            app.Map("/messaging", (_app) => _app.UseMiddleware<Websockets.WebsocketSessionMiddleware>(serviceProvider.GetService<Websockets.WebsocketSessionService>()));
             app.Map("/progress", (_app) => _app.UseMiddleware<Websockets.ProgressSocketMiddleware>(serviceProvider.GetService<Websockets.ProgressSocketSessionService>()));
-            app.Map("/video", (_app) => _app.UseMiddleware<Websockets.VideoSocketMiddleware>(serviceProvider.GetService<Websockets.VideoSocketSessionService>()));
+            // a second service isn't really necessary; this is just used to demonstrate how to add a second/specialty websocket service, if needed.
 
             app.UseHttpsRedirection();
 

@@ -13,7 +13,7 @@ using SimpleAPI_NetCore50.Schemas;
 
 namespace SimpleAPI_NetCore50.Websockets
 {
-    public class VideoSocketSessionService : SocketSessionService
+    public class VideoSocketSessionService : WebsocketSessionService
     {
         // Overrides
         public VideoSocketSessionService(IConfiguration configuration, Services.FileService fileService) : base(configuration, fileService)
@@ -23,7 +23,7 @@ namespace SimpleAPI_NetCore50.Websockets
         public async override Task<SessionSocket> JoinSession(HttpContext context, string sessionType, string sessionKey)
         {
 
-            SocketSession targetSession = GetSessionByKey(sessionKey);
+            WebsocketSession targetSession = GetSessionByKey(sessionKey);
             if (targetSession == null)
             {
                 targetSession = this.CreateSession(sessionType, sessionKey);
@@ -61,7 +61,7 @@ namespace SimpleAPI_NetCore50.Websockets
         {
             try
             {
-                SocketSession socketSession = GetSessionByKey(sessionKey);
+                WebsocketSession socketSession = GetSessionByKey(sessionKey);
                 List<SocketSessionMessageResponse> messages = socketSession.GetAttributeValue<List<SocketSessionMessageResponse>>("messages");
 
                 string serializedMessage = Encoding.UTF8.GetString(buffer, 0, result.Count);
