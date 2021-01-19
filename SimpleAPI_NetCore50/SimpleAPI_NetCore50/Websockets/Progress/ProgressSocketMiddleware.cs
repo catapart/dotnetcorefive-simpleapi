@@ -42,7 +42,7 @@ namespace SimpleAPI_NetCore50.Websockets
             {
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
-                    await SessionService.ReceiveMessage(sessionSocket.Socket, result, buffer);
+                    await SessionService.ReceiveMessage(sessionKey, sessionSocket, result, buffer);
                     return;
                 }
                 else if (result.MessageType == WebSocketMessageType.Close)

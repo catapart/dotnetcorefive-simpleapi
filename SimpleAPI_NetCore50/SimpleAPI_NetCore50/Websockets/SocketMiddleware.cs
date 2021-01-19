@@ -49,7 +49,7 @@ namespace SimpleAPI_NetCore50.Websockets
             {
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
-                    await SessionService.ReceiveMessage(sessionSocket.Socket, result, buffer);
+                    await SessionService.ReceiveMessage(sessionKey, sessionSocket, result, buffer);
                     return;
                 }
                 else if (result.MessageType == WebSocketMessageType.Close)
@@ -64,7 +64,7 @@ namespace SimpleAPI_NetCore50.Websockets
         }
         protected virtual async Task Receive(WebSocket socket, Action<WebSocketReceiveResult, byte[]> handleMessage)
         {
-            var buffer = new byte[1024 * 4];
+            var buffer = new byte[1024 * 20];
 
             while (socket.State == WebSocketState.Open)
             {

@@ -82,6 +82,21 @@ namespace SimpleAPI_NetCore50.Services
             string filenameOnDisk = "";
             string fileContentType = "";
 
+            SocketSession targetSession = sessionService.GetSessionByKey(sessionKey);
+            if (targetSession == null)
+            {
+                modelState.AddModelError("File", "The requested session could not be found.");
+                return null;
+            }
+            targetSession.SetAttribute("abort", false);
+
+            int totalBytes = targetSession.GetAttributeValue<int>("unitTotal");
+
+            if (section == null)
+            {
+                sessionService.UpdateProgress(targetSession.SessionKey, -1, -1, "");
+            }
+
             while (section != null)
             {
                 var hasContentDispositionHeader = ContentDispositionHeaderValue.TryParse(section.ContentDisposition, out var contentDisposition);
@@ -110,15 +125,6 @@ namespace SimpleAPI_NetCore50.Services
                             Directory.CreateDirectory(sessionService.QuarantinedFilePath);
                         }
                         string quarantinedPath = Path.Combine(sessionService.QuarantinedFilePath, filenameOnDisk);
-
-                        SocketSession targetSession = sessionService.GetSessionByKey(sessionKey);
-                        if(targetSession == null)
-                        {
-                            modelState.AddModelError("File", "The requested session could not be found.");
-                            return null;
-                        }
-
-                        int totalBytes = targetSession.GetAttributeValue<int>("unitTotal");
 
                         await SaveFileToDiskWithProgress(section, contentDisposition, modelState, quarantinedPath, sessionService.PermittedExtensions, sessionService.FileSizeLimit, sessionService, targetSession, totalBytes);
 
@@ -172,6 +178,18 @@ namespace SimpleAPI_NetCore50.Services
             }
         }
 
+        public void CancelUpload(ProgressSocketSessionService sessionService, string sessionKey)
+        {
+            SocketSession targetSession = sessionService.GetSessionByKey(sessionKey);
+            if (targetSession == null)
+            {
+                throw new Exception("The requested session could not be found.");
+            }
+
+            targetSession.SetAttribute("abort", true);
+
+        }
+
         private async Task CopyToStreamWithProgress(Stream source, Stream destination, ProgressSocketSessionService sessionService, SocketSession targetSession, int totalBytes = -1, string stepId = "", CancellationToken cancellationToken = default(CancellationToken), int bufferSize = 0x1000)
         {
             byte[] buffer = new byte[bufferSize];
@@ -179,15 +197,21 @@ namespace SimpleAPI_NetCore50.Services
             int totalBytesRead = 0;
             while((currentBytesRead = await source.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0)
             {
+                bool shouldAbort = targetSession.GetAttributeValue<bool>("abort");
+                if(shouldAbort)
+                {
+                    break;
+                }
                 await destination.WriteAsync(buffer, 0, currentBytesRead, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
 
                 totalBytesRead += currentBytesRead;
                 sessionService.UpdateProgress(targetSession.SessionKey, totalBytesRead, totalBytes, stepId);
 
-                await Task.Delay(1); // Stops worker threads from going crazy with CPU
+                //await Task.Delay(1); // Stops worker threads from going crazy with CPU
             }
         }
+
 
         private bool IsValidFileExtensionAndSignature(string fileName, Stream data, string[] permittedExtensions)
         {

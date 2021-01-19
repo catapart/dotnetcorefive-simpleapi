@@ -21,7 +21,7 @@ namespace SimpleAPI_NetCore50.Websockets
         public WebsocketSessionType SessionType;
         public string SessionKey;
         private ConcurrentDictionary<string, SessionSocket> Sockets = new ConcurrentDictionary<string, SessionSocket>();
-        private ConcurrentBag<ISessionAttribute> Attributes = new ConcurrentBag<ISessionAttribute>();
+        private ConcurrentDictionary<string, ISessionAttribute> Attributes = new ConcurrentDictionary<string, ISessionAttribute>();
 
         public static WebsocketSessionType GetSessionType(string typeName)
         {
@@ -68,57 +68,82 @@ namespace SimpleAPI_NetCore50.Websockets
         {
             Sockets.TryAdd(CreateSocketId(), sessionSocket);
         }
-        public async Task RemoveSessionSocket(string key)
+        public async Task RemoveSessionSocket(string socketId)
         {
             SessionSocket socket;
-            Sockets.TryRemove(key, out socket);
-            await socket.Socket.CloseAsync(closeStatus: WebSocketCloseStatus.NormalClosure, statusDescription: "Closed by the SocketSession", cancellationToken: CancellationToken.None);
+            Sockets.TryRemove(socketId, out socket);
+
+            if (socket != null && socket.Socket.State != WebSocketState.Closed)
+            {
+                await socket.Socket.CloseAsync(closeStatus: WebSocketCloseStatus.NormalClosure, statusDescription: "Closed by the SocketSession", cancellationToken: CancellationToken.None);
+            }
         }
 
         public async Task CloseAsync(WebSocketCloseStatus closeStatus, string statusDescription, CancellationToken cancellationToken)
         {
-            await Task.WhenAll(Sockets.Select(pair => pair.Value.Socket.CloseAsync(closeStatus: closeStatus, statusDescription: statusDescription, cancellationToken: cancellationToken)));
+            IEnumerable<Task> tasks = Sockets.Select(pair => RemoveSessionSocket(pair.Value.Token.SocketId));
+            await Task.WhenAll(tasks);
         }
-
-        
        
 
         public T GetAttributeValue<T>(string name)
         {
-            ISessionAttribute attribute = this.Attributes.FirstOrDefault(attribute => attribute.Name == name);
+            ISessionAttribute attribute = this.Attributes[name];
             object value = attribute.Data;
             return (T) value;
         }
         public object GetAttributeValue(string name)
         {
-            ISessionAttribute attribute = this.Attributes.FirstOrDefault(attribute => attribute.Name == name);
+            ISessionAttribute attribute = this.Attributes[name];
             var value = Convert.ChangeType(attribute.Data, attribute.DataType);
 
             return value;
         }
+        public ConcurrentDictionary<string, ISessionAttribute> GetAttributePairs()
+        {
+            return this.Attributes;
+        }
         public ISessionAttribute GetAttribute(string name)
         {
-            return this.Attributes.FirstOrDefault(attribute => attribute.Name == name);
+            return this.Attributes[name];
         }
-        public ConcurrentBag<ISessionAttribute> GetAttributes()
+        public ConcurrentDictionary<string, ISessionAttribute> GetAttributes()
         {
             return this.Attributes;
         }
         public void SetAttribute(string name, object value)
         {
-            this.Attributes.Add(SessionAttribute.Create(name, value));
+            this.AddOrUpdateAttribute(name, value);
         }
         public void SetAttributes(IEnumerable<ISessionAttribute> attributes)
         {
             foreach (ISessionAttribute attribute in attributes)
             {
-                this.Attributes.Add(attribute);
+                this.AddOrUpdateAttribute(attribute.Name, attribute.Data);
             }
         }
 
         private string CreateSocketId()
         {
             return Guid.NewGuid().ToString();
+        }
+
+        private void AddOrUpdateAttribute(string name, object value)
+        {
+            ISessionAttribute attribute = null;
+
+            try
+            {
+                attribute = this.GetAttribute(name);
+            }
+            catch (Exception exception) { }
+            finally { }// [NOTE] - no need to handle exception; this is a guard;
+            if (attribute != null)
+            {
+                this.Attributes.TryRemove(name, out attribute); // delete existing attribute to remake it; simpler than updating generic types;
+            }
+
+            this.Attributes.TryAdd(name, SessionAttribute.Create(name, value));
         }
     }
 }

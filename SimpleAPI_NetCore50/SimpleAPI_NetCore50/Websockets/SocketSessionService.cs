@@ -88,10 +88,11 @@ namespace SimpleAPI_NetCore50.Websockets
 
         public virtual async Task EndSession(string sessionKey)
         {
-            SocketSession session;
-            Sessions.TryRemove(sessionKey, out session);
-
+            SocketSession session = GetSessionByKey(sessionKey);
             await session.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closed by the Session Service.", CancellationToken.None);
+
+            SocketSession removedSession;
+            Sessions.TryRemove(sessionKey, out removedSession);
 
             KeyValuePair<string, ISessionAttribute[]> preparedSession = GetPreparedSession(sessionKey);
             if (!preparedSession.Equals(default(KeyValuePair<string, ISessionAttribute[]>)))
@@ -152,7 +153,7 @@ namespace SimpleAPI_NetCore50.Websockets
 
             foreach (var pair in socketSession.GetSockets())
             {
-                if (!socketIds.Contains(pair.Key) && pair.Value.Socket.State == WebSocketState.Open)
+                if (socketIds.Contains(pair.Key) && pair.Value.Socket.State == WebSocketState.Open)
                 {
                     await SendMessage(pair.Value.Socket, message);
                 }
@@ -174,7 +175,7 @@ namespace SimpleAPI_NetCore50.Websockets
 
             foreach (var pair in socketSession.GetSockets())
             {
-                if (!sockets.Contains(pair.Value.Socket) && pair.Value.Socket.State == WebSocketState.Open)
+                if (sockets.Contains(pair.Value.Socket) && pair.Value.Socket.State == WebSocketState.Open)
                 {
                     tasks.Add(SendMessage(pair.Value.Socket, message));
                 }
@@ -199,7 +200,7 @@ namespace SimpleAPI_NetCore50.Websockets
 
                 foreach (var pair in socketSession.GetSockets())
                 {
-                    if (!socketIds.Contains(pair.Key) && pair.Value.Socket.State == WebSocketState.Open)
+                    if (socketIds.Contains(pair.Key) && pair.Value.Socket.State == WebSocketState.Open)
                     {
                         tasks.Add(SendMessage(pair.Value.Socket, message));
                     }
@@ -226,7 +227,7 @@ namespace SimpleAPI_NetCore50.Websockets
 
                 foreach (var pair in socketSession.GetSockets())
                 {
-                    if (!sockets.Contains(pair.Value.Socket) && pair.Value.Socket.State == WebSocketState.Open)
+                    if (sockets.Contains(pair.Value.Socket) && pair.Value.Socket.State == WebSocketState.Open)
                     {
                         tasks.Add(SendMessage(pair.Value.Socket, message));
                     }
@@ -316,7 +317,7 @@ namespace SimpleAPI_NetCore50.Websockets
             }
         }
 
-        public virtual async Task ReceiveMessage(WebSocket socket, WebSocketReceiveResult result, byte[] buffer)
+        public virtual async Task ReceiveMessage(string sessionKey, SessionSocket sessionSocket, WebSocketReceiveResult result, byte[] buffer)
         {
             // intentionally blank
             // you don't have to do anything with messages you get from the client
@@ -326,7 +327,7 @@ namespace SimpleAPI_NetCore50.Websockets
 
         private static string CreateSessionKey()
         {
-            return GenerateRandomString(12);
+            return GenerateRandomString(5);
         }
         private static string GenerateRandomString(int length, bool useNumbers = true)
         {

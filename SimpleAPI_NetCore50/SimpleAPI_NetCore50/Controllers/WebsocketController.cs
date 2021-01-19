@@ -13,19 +13,26 @@ namespace SimpleAPI_NetCore50.Controllers
     {
         private readonly SimpleApiContext DatabaseContext;
         private readonly SocketSessionService ProgressSessionService;
+        private readonly SocketSessionService VideoSessionService;
 
-        public WebsocketController(SimpleApiContext context, ProgressSocketSessionService progressSessionService)
+        public WebsocketController(SimpleApiContext context, ProgressSocketSessionService progressSessionService, VideoSocketSessionService videoSessionService)
         {
             DatabaseContext = context;
             ProgressSessionService = progressSessionService;
+            VideoSessionService = videoSessionService;
         }
 
-        // GET: api/Application
-        [HttpGet("{sessionType}/{unitTotal?}")]
-        public async Task<ActionResult> OpenSessionGet(string sessionType, int unitTotal = -1)
+        [HttpGet("{sessionType}")]
+        public async Task<ActionResult> OpenSessionGet(string sessionType)
         {
-            string sessionKey = this.PrepareSession(sessionType, unitTotal);
+            string sessionKey = this.PrepareSession(sessionType);
             return CreatedAtAction(nameof(OpenSessionGet), sessionKey);
+        }
+        [HttpGet("progress/{unitTotal?}")]
+        public async Task<ActionResult> OpenProgressSession(int unitTotal = -1)
+        {
+            string sessionKey = this.PrepareSession("progress", unitTotal);
+            return CreatedAtAction(nameof(OpenProgressSession), sessionKey);
         }
 
         [HttpPost]
@@ -36,7 +43,7 @@ namespace SimpleAPI_NetCore50.Controllers
             return CreatedAtAction(nameof(OpenSessionPost), sessionKey);
         }
 
-        private string PrepareSession(string sessionType, int unitTotal)
+        private string PrepareSession(string sessionType, int unitTotal = -1)
         {
             List<ISessionAttribute> attributes = new List<ISessionAttribute>();
 
@@ -53,6 +60,18 @@ namespace SimpleAPI_NetCore50.Controllers
                     attributes.Add(new SessionAttribute<int>("unitTotal", unitTotal));
                 }
                 string sessionKey = ProgressSessionService.PrepareNewSession(attributes.ToArray());
+                return sessionKey;
+            }
+            else if (type == WebsocketSessionType.Message)
+            {
+                //attributes.Add(new SessionAttribute<List<Schemas.SocketSessionMessageRequest>>("message", new List<Schemas.SocketSessionMessageRequest>()));
+                //string sessionKey = ProgressSessionService.PrepareNewSession(attributes.ToArray());
+                //return sessionKey;
+            }
+            else if(type == WebsocketSessionType.Stream)
+            {
+                attributes.Add(new SessionAttribute<List<Schemas.SocketSessionMessageResponse>>("messages", new List<Schemas.SocketSessionMessageResponse>()));
+                string sessionKey = VideoSessionService.PrepareNewSession(attributes.ToArray());
                 return sessionKey;
             }
 

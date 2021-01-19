@@ -23,7 +23,6 @@
 
   <ItemGroup>
     <Folder Include="Quarantine\" />
-    <Folder Include="wwwroot\apps\" />
   </ItemGroup>
 
 </Project>
