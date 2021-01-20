@@ -25,44 +25,6 @@ namespace SimpleAPI_NetCore50.Websockets
             SessionService = socketSessionService;
         }
 
-        //public virtual async Task Invoke(HttpContext context)
-        //{
-        //    if (!context.WebSockets.IsWebSocketRequest)
-        //        return;
-
-        //    if (!context.Request.Path.HasValue)
-        //    {
-        //        return;
-        //    }
-        //    string path = context.Request.Path;
-
-        //    string[] pathArray = path.Split("/");
-        //    string sessionKey = pathArray[1];
-        //    if (string.IsNullOrEmpty(sessionKey))
-        //    {
-        //        return;
-        //    }
-
-        //    SessionSocket sessionSocket = await SessionService.JoinSession(context, "unknown", sessionKey);
-
-        //    await Receive(sessionSocket.Socket, async (result, buffer) =>
-        //    {
-        //        if (result.MessageType == WebSocketMessageType.Text)
-        //        {
-        //            await SessionService.ReceiveMessage(sessionKey, sessionSocket, result, buffer);
-        //            return;
-        //        }
-        //        else if (result.MessageType == WebSocketMessageType.Close)
-        //        {
-        //            await SessionService.EndSession(sessionKey);
-        //            return;
-        //        }
-
-        //    });
-
-        //    await _next.Invoke(context);
-        //}
-
 
         public virtual async Task Invoke(HttpContext context)
         {
@@ -82,13 +44,13 @@ namespace SimpleAPI_NetCore50.Websockets
                 return;
             }
 
-            SessionSocket sessionSocket = await SessionService.JoinSession(context, "stream", sessionKey);
+            WebsocketSessionPeer peer = await SessionService.JoinSession(context, "stream", sessionKey);
 
-            await Receive(sessionSocket.Socket, async (result, buffer) =>
+            await Receive(peer.Socket, async (result, buffer) =>
             {
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
-                    await ((WebsocketSessionService)SessionService).ReceiveMessage(sessionKey, sessionSocket, result, buffer);
+                    await ((WebsocketSessionService)SessionService).ReceiveMessage(sessionKey, peer, result, buffer);
                     return;
                 }
                 else if (result.MessageType == WebSocketMessageType.Close)
@@ -98,20 +60,17 @@ namespace SimpleAPI_NetCore50.Websockets
                     string hostId = targetSession.GetAttributeValue<string>("hostId");
 
                     // if the host quit, kill the session
-                    if (sessionSocket.Token.SocketId == hostId)
+                    if (peer.Token.PeerId == hostId)
                     {
                         await SessionService.EndSession(sessionKey);
                         return;
                     }
 
                     // otherwise, disconnect and alert host that someone has disconnected
-                    await targetSession.RemoveSessionSocket(sessionSocket.Token.SocketId);
-                    Schemas.SocketSessionMessageResponse response = new Schemas.SocketSessionMessageResponse()
-                    {
-                        MessageType = Schemas.SocketSessionMessageType.StatusUpdates,
-                        Message = System.Text.Json.JsonSerializer.Serialize(new object[] { new { Status = "disconnect", Peers = new Models.SocketToken[1] { sessionSocket.Token } } })
-                    };
-                    SessionService.SendMessageToPeers(sessionKey, sessionSocket.Token.SocketId, response);
+                    await targetSession.RemovePeer(peer.Token.PeerId);
+                    Models.WebsocketSessionUpdate[] updates = WebsocketSessionService.CreatePeerUpdates(Models.WebsocketSessionUpdateStatus.Disconnect, peer.Token);
+                    Models.WebsocketSessionMessageResponse response = WebsocketSessionService.CreateWebsocketResponseMessage(Models.WebsocketSessionMessageType.StatusUpdates, updates);
+                    SessionService.SendMessageToPeers(sessionKey, peer.Token.PeerId, response);
                 }
 
             });

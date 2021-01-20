@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using SimpleAPI_NetCore50.Data;
+using SimpleAPI_NetCore50.Utilities;
 using SimpleAPI_NetCore50.Websockets;
 
 namespace SimpleAPI_NetCore50.Controllers
@@ -11,11 +12,11 @@ namespace SimpleAPI_NetCore50.Controllers
     [ApiController]
     public class WebsocketController : Controller
     {
-        private readonly SimpleApiContext DatabaseContext;
+        private readonly SimpleApiDBContext DatabaseContext;
         private readonly WebsocketSessionService ProgressSessionService;
         private readonly WebsocketSessionService MessaginSessionService;
 
-        public WebsocketController(SimpleApiContext context, ProgressSocketSessionService progressSessionService, WebsocketSessionService messaginSessionService)
+        public WebsocketController(SimpleApiDBContext context, ProgressSocketSessionService progressSessionService, WebsocketSessionService messaginSessionService)
         {
             DatabaseContext = context;
             ProgressSessionService = progressSessionService;
@@ -36,7 +37,7 @@ namespace SimpleAPI_NetCore50.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult> OpenSessionPost(Schemas.SocketSessionRequest socketSessionRequest)
+        public async Task<ActionResult> OpenSessionPost(Models.WebsocketSessionRequest socketSessionRequest)
         {
             string sessionKey = this.PrepareSession(socketSessionRequest.SessionType, socketSessionRequest.UnitTotal);
 
@@ -60,7 +61,7 @@ namespace SimpleAPI_NetCore50.Controllers
             }
             else if (type == WebsocketSessionType.Messaging)
             {
-                attributes.Add(new ProcessArtifact<List<Schemas.SocketSessionMessageResponse>>("messages", new List<Schemas.SocketSessionMessageResponse>()));
+                attributes.Add(new ProcessArtifact<List<Models.WebsocketSessionMessageResponse>>("messages", new List<Models.WebsocketSessionMessageResponse>()));
                 string sessionKey = MessaginSessionService.PrepareNewSession(attributes.ToArray());
                 return sessionKey;
             }

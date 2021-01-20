@@ -1,10 +1,10 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace SimpleAPI_NetCore50.Schemas
+namespace SimpleAPI_NetCore50.Models
 {
-    public class SocketSessionMessageRequest
+    public class WebsocketSessionMessageRequest
     {
-        public SocketSessionMessageType Type { get; set; }
+        public WebsocketSessionMessageType Type { get; set; }
         [Required(ErrorMessage = "Message is Required")]
         public string Message { get; set; }
         public string TargetMessageId { get; set; }

@@ -7,7 +7,7 @@ namespace SimpleAPI_NetCore50.Data
 {
     public static class DatabaseInitializer
     {
-        public static void Initialize(SimpleApiContext context)
+        public static void Initialize(SimpleApiDBContext context)
         {
             context.Database.EnsureCreated();
 

@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace SimpleAPI_NetCore50.Schemas
+namespace SimpleAPI_NetCore50.Models
 {
     public class AuthRequest
     {

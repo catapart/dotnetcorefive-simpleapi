@@ -1,12 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-
-namespace SimpleAPI_NetCore50.Schemas
+﻿namespace SimpleAPI_NetCore50.Models
 {
-    public enum SocketSessionMessageType
+    public enum WebsocketSessionMessageType
     {
+        [Attributes.DoNotDocument]
         Unknown, // error checking
         Greeting, // sending the initial session token and host token
         Introduction, // for gaining access to channels / providing user data like name/profile pic

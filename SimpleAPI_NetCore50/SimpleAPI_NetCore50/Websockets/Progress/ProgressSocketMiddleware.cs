@@ -36,13 +36,13 @@ namespace SimpleAPI_NetCore50.Websockets
                 return;
             }
 
-            SessionSocket sessionSocket = await SessionService.JoinSession(context, "progress", sessionKey);
+            WebsocketSessionPeer peer = await SessionService.JoinSession(context, "progress", sessionKey);
 
-            await Receive(sessionSocket.Socket, async (result, buffer) =>
+            await Receive(peer.Socket, async (result, buffer) =>
             {
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
-                    await SessionService.ReceiveMessage(sessionKey, sessionSocket, result, buffer);
+                    await SessionService.ReceiveMessage(sessionKey, peer, result, buffer);
                     return;
                 }
                 else if (result.MessageType == WebSocketMessageType.Close)

@@ -10,10 +10,10 @@ namespace SimpleAPI_NetCore50.Controllers
     [ApiController]
     public class ApplicationController : Controller
     {
-        private readonly SimpleApiContext DatabaseContext;
+        private readonly SimpleApiDBContext DatabaseContext;
         private readonly ILogger<ApplicationController> Logger;
 
-        public ApplicationController(ILogger<ApplicationController> logger, SimpleApiContext context)
+        public ApplicationController(ILogger<ApplicationController> logger, SimpleApiDBContext context)
         {
             DatabaseContext = context;
             Logger = logger;
