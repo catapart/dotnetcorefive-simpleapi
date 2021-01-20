@@ -8,15 +8,15 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 
 namespace SimpleAPI_NetCore50.Data
 {
-    public class SimpleApiContext : IdentityDbContext<Authentication.Account>
+    public class SimpleApiDBContext : IdentityDbContext<Authentication.Account>
     {
         public DbSet<Authentication.Account> Accounts { get; set; }
         public DbSet<Models.DataItem> DataItems { get; set; }
         public DbSet<Models.FileMap> FileMaps { get; set; }
 
-        public SimpleApiContext(DbContextOptions<SimpleApiContext> options) : base(options)
+        public SimpleApiDBContext(DbContextOptions<SimpleApiDBContext> options) : base(options)
         {
-
+            // [enhancement] handle updating the DB model without destroying the whole DB.
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

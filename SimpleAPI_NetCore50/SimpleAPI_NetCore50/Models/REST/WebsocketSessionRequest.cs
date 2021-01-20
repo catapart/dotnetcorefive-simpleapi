@@ -1,8 +1,8 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace SimpleAPI_NetCore50.Schemas
+namespace SimpleAPI_NetCore50.Models
 {
-    public class SocketSessionRequest
+    public class WebsocketSessionRequest
     {
         [Required(ErrorMessage ="SessionType is Required")]
         public string SessionType { get; set; }

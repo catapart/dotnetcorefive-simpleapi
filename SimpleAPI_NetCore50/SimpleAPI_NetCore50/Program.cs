@@ -29,7 +29,7 @@ namespace SimpleAPI_NetCore50
                 IServiceProvider services = scope.ServiceProvider;
                 try
                 {
-                    Data.SimpleApiContext context = services.GetRequiredService<Data.SimpleApiContext>();
+                    Data.SimpleApiDBContext context = services.GetRequiredService<Data.SimpleApiDBContext>();
                     Data.DatabaseInitializer.Initialize(context);
                 }
                 catch(Exception exception)

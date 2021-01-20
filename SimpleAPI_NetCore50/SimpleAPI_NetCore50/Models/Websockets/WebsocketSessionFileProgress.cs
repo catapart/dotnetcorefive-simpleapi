@@ -1,7 +1,6 @@
-﻿
-namespace SimpleAPI_NetCore50.Schemas
+﻿namespace SimpleAPI_NetCore50.Models
 {
-    public class ProgressResponse
+    public class WebsocketSessionFileProgress
     {
         public string SessionKey { get; set; }
         public int UnitsCompleted { get; set; }

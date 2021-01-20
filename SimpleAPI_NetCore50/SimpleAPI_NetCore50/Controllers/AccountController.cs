@@ -30,7 +30,7 @@ namespace SimpleAPI_NetCore50.Controllers
 
         [HttpPost]
         [Route("login")]
-        public async Task<ActionResult> Login([FromBody] Schemas.AuthRequest model)
+        public async Task<ActionResult> Login([FromBody] Models.AuthRequest model)
         {
             Authentication.Account account = await AccountManager.FindByNameAsync(model.Email);
             if (account != null && await AccountManager.CheckPasswordAsync(account, model.Password))
@@ -65,12 +65,13 @@ namespace SimpleAPI_NetCore50.Controllers
 
         [HttpPost]
         [Route("register")]
-        public async Task<ActionResult> Register([FromBody] Schemas.AuthRequest model)
+        [ProducesResponseType(typeof(Models.AuthResponse), 200)]
+        public async Task<ActionResult> Register([FromBody] Models.AuthRequest model)
         {
             Authentication.Account accountExists = await AccountManager.FindByNameAsync(model.Email);
             if (accountExists != null)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, new Schemas.AuthResponse { Status = "Error", Message = "Account already exists!" });
+                return StatusCode(StatusCodes.Status500InternalServerError, new Models.AuthResponse { Status = "Error", Message = "Account already exists!" });
             }
 
             Authentication.Account account = new Authentication.Account()
@@ -82,7 +83,13 @@ namespace SimpleAPI_NetCore50.Controllers
             IdentityResult result = await AccountManager.CreateAsync(account, model.Password);
             if (!result.Succeeded)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, new Schemas.AuthResponse { Status = "Error", Message = "Account creation failed! Please check request details and try again." });
+                string errorMessage = "Account creation failed! Please check request details and try again.";
+                foreach (var error in result.Errors)
+                {
+                    errorMessage += Environment.NewLine;
+                    errorMessage += "  - " + error.Description;
+                }
+                return StatusCode(StatusCodes.Status500InternalServerError, new Models.AuthResponse { Status = "Error", Message = errorMessage });
             }
 
             await this.SanitizeRole(model);
@@ -92,10 +99,10 @@ namespace SimpleAPI_NetCore50.Controllers
                 await AccountManager.AddToRoleAsync(account, model.Role);
             }
 
-            return Ok(new Schemas.AuthResponse { Status = "Success", Message = "Account created successfully!" });
+            return Ok(new Models.AuthResponse { Status = "Success", Message = "Account created successfully!" });
         }
 
-        private async Task SanitizeRole(Schemas.AuthRequest model)
+        private async Task SanitizeRole(Models.AuthRequest model)
         {
             // make sure all of your roles actually exist
             if (!await RoleManager.RoleExistsAsync(Authentication.AccountRole.Admin))

@@ -6,10 +6,11 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Net.WebSockets;
 using System.Threading.Tasks;
+using SimpleAPI_NetCore50.Models;
 
 namespace SimpleAPI_NetCore50.Websockets
 {
-    public class ProgressSocketSessionService : SocketSessionService
+    public class ProgressSocketSessionService : WebsocketSessionService
     {
         public readonly long FileSizeLimit;
         public readonly string[] PermittedExtensions = { ".txt" };
@@ -27,40 +28,37 @@ namespace SimpleAPI_NetCore50.Websockets
             QuarantinedFilePath = AppConfig.GetValue<string>("FileUpload:QuarantinedFilePath");
         }
 
-        public async override Task<SessionSocket> JoinSession(HttpContext context, string sessionType, string sessionKey)
+        public async override Task<WebsocketSessionPeer> JoinSession(HttpContext context, string sessionType, string sessionKey)
         {
-            SocketSession targetSession = GetSessionByKey(sessionKey);
+            WebsocketSession targetSession = GetSessionByKey(sessionKey);
             if (targetSession == null)
             {
                 targetSession = this.CreateSession(sessionType, sessionKey);
             }
 
-            if(targetSession.GetSockets().Count > 0)
+            if(targetSession.GetPeers().Count > 0)
             {
                 throw new Exception("Unable to join Progress session that already has a subscriber.");
             }
 
             WebSocket socket = await context.WebSockets.AcceptWebSocketAsync();
 
-            SessionSocket sessionSocket = targetSession.AddWebSocket(socket);
-            targetSession.SetAttribute("hostId", sessionSocket.Token.SocketId);
+            WebsocketSessionPeer peer = targetSession.AddPeer(socket);
+            targetSession.SetAttribute("hostId", peer.Token.PeerId);
 
             // alert requester of their own token
-            Models.SocketToken hostToken = sessionSocket.Token;
-            Schemas.SocketSessionMessageResponse response = new Schemas.SocketSessionMessageResponse()
-            {
-                MessageType = Schemas.SocketSessionMessageType.Greeting,
-                Message = System.Text.Json.JsonSerializer.Serialize(new { SessionKey = sessionKey, HostToken = hostToken, Token = sessionSocket.Token })
-            };
-            SendMessage(sessionSocket, response);
+            WebsocketSessionPeerToken hostToken = peer.Token;
+            WebsocketSessionGreeting greeting = new WebsocketSessionGreeting { SessionKey = sessionKey, HostToken = hostToken, Token = peer.Token };
+            WebsocketSessionMessageResponse greetingResponse = CreateWebsocketResponseMessage(WebsocketSessionMessageType.Greeting, greeting);
+            SendMessage(peer, greetingResponse);
 
-            return sessionSocket;
+            return peer;
         }
 
-        public async override Task ReceiveMessage(string sessionKey, SessionSocket sessionSocket, WebSocketReceiveResult result, byte[] buffer)
+        public async override Task ReceiveMessage(string sessionKey, WebsocketSessionPeer peer, WebSocketReceiveResult result, byte[] buffer)
         {
-            Schemas.SocketError error = new Schemas.SocketError(){ ErrorCode = "WP_001", Message = "Progress Sessions do not expect messages from the client." };
-            SendMessage(sessionSocket.Socket, error);
+            WebsocketSessionError error = new WebsocketSessionError{ ErrorCode = "WP_001", Message = "Progress Sessions do not expect messages from the client." };
+            SendMessage(peer.Socket, error);
         }
 
         // Custom functionality
@@ -71,7 +69,7 @@ namespace SimpleAPI_NetCore50.Websockets
 
         public async Task UpdateProgress(string sessionKey, int value, int total = -1, string stepId = "")
         {
-            Schemas.ProgressResponse response = new Schemas.ProgressResponse()
+            WebsocketSessionFileProgress response = new WebsocketSessionFileProgress
             {
                 SessionKey = sessionKey,
                 UnitsCompleted = value,
@@ -79,23 +77,22 @@ namespace SimpleAPI_NetCore50.Websockets
                 StepID = stepId
             };
 
-            Schemas.SocketSessionUpdate[] updates = new Schemas.SocketSessionUpdate[]
-            {
-                new Schemas.SocketSessionUpdate()
+            WebsocketSessionUpdate[] updates = CreateProgressUpdates(WebsocketSessionUpdateStatus.Progress, response);
+            WebsocketSession session = GetSessionByKey(sessionKey);
+            string hostId = session.GetAttributeValue<string>("hostId");
+            WebsocketSessionMessageResponse updateResponse = CreateWebsocketResponseMessage(WebsocketSessionMessageType.StatusUpdates, updates);
+            SendMessage(sessionKey, hostId, updateResponse);
+        }
+        protected static WebsocketSessionUpdate[] CreateProgressUpdates(WebsocketSessionUpdateStatus status, WebsocketSessionFileProgress progress)
+        {
+            WebsocketSessionUpdate[] updates = new WebsocketSessionUpdate[]{
+                new WebsocketSessionUpdate
                 {
-                    Status = "progress",
-                    Progress = response
+                    Status = GetSessionUpdateStatusString(status),
+                    Progress = progress
                 }
             };
-
-            SocketSession socketSession = GetSessionByKey(sessionKey);
-            string hostId = socketSession.GetAttributeValue<string>("hostId");
-            Schemas.SocketSessionMessageResponse updateResponse = new Schemas.SocketSessionMessageResponse()
-            {
-                MessageType = Schemas.SocketSessionMessageType.StatusUpdates,
-                Message = System.Text.Json.JsonSerializer.Serialize(updates)
-            };
-            SendMessage(sessionKey, hostId, updateResponse);
+            return updates;
         }
 
         public void CancelUpload(string sessionKey)

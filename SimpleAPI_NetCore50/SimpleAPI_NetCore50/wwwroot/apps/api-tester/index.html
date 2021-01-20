@@ -32,8 +32,8 @@
         class WebsocketSession {
 
             get isHost() {
-                let tokenId = this.token?.SocketId;
-                let hostId = this.hostToken?.SocketId;
+                let tokenId = this.token?.PeerId;
+                let hostId = this.hostToken?.PeerId;
                 if (tokenId == null || hostId == null || hostId != tokenId) {
                     return false;
                 }
@@ -44,9 +44,8 @@
 
                 this.domain = new URL(window.location).host;
 
-                this._sessionType = type || 'stream';
+                this._sessionType = type || 'messaging';
                 this._sessionType = this._sessionType.toLowerCase();
-                this._websocketKey = (this._sessionType == 'stream') ? 'video' : 'progress';
                 this.unitTotal = unitTotal || -1;
 
                 this.socket = null;
@@ -68,12 +67,12 @@
                 let response = await fetch(`https://${this.domain}/api/websocket/${this._sessionType}${(this.unitTotal > -1) ? '/' + this.unitTotal : ''}`);
                 let sessionKey = await response.text();
                 console.log("Established new websocket session: ", sessionKey);
-                let url = `wss://${this.domain}/${this._websocketKey}/${sessionKey}`;
+                let url = `wss://${this.domain}/${this._sessionType}/${sessionKey}`;
 
                 return this.connect(url, displayName, iconUrl, handlers);
             }
             async join(sessionKey, displayName, iconUrl, handlers) {
-                let url = `wss://${this.domain}/${this._websocketKey}/${sessionKey}`;
+                let url = `wss://${this.domain}/${this._sessionType}/${sessionKey}`;
                 return this.connect(url, displayName, iconUrl, handlers);
             }
 
@@ -232,7 +231,7 @@
                 this.token = greeting.Token;
                 this.hostToken = greeting.HostToken;
 
-                if (this._sessionType == 'stream') {
+                if (this._sessionType == 'messaging') {
                     this.updatePeers(greeting.Peers);
 
                     this.makeIntroduction();
@@ -257,13 +256,13 @@
             }
             makeIntroduction() {
 
-                let displayName = this.displayName || this.token.SocketId;
+                let displayName = this.displayName || this.token.PeerId;
                 this.token.DisplayName = displayName;
                 this.token.IconUrl = '';
 
                 console.log("Sending Introduction: ", this.token);
                 let message = JSON.stringify(this.token);
-                this.socket.send(JSON.stringify({ Type: 2, SenderId: this.token.SocketId, Message: message, Recipients: [this.hostToken.SocketId] }));
+                this.socket.send(JSON.stringify({ Type: 2, SenderId: this.token.PeerId, Message: message, Recipients: [this.hostToken.PeerId] }));
             }
             accessSession(accessUpdate) {
                 try {
@@ -273,7 +272,7 @@
 
                     let token = accessUpdate.Peers[0];
                     this.token = token;
-                    if (this.token.SocketId == this.hostToken.SocketId) {
+                    if (this.token.PeerId == this.hostToken.PeerId) {
                         this.hostToken = token;
                     }
 
@@ -281,7 +280,7 @@
                     let update = { Status: 'connect', Peers: [token] };
                     let message = JSON.stringify([update]);
                     console.log("Sending Connection to existing peers: ", message);
-                    this.socket.send(JSON.stringify({ Type: 5, SenderId: this.token.SocketId, Message: message }));
+                    this.socket.send(JSON.stringify({ Type: 5, SenderId: this.token.PeerId, Message: message }));
 
                     this.__resolveConnect__(accessUpdate);
                 }
@@ -314,7 +313,7 @@
                 }
                 let message = JSON.stringify([update]);
                 console.log("Sending Access: ", message);
-                this.socket.send(JSON.stringify({ Type: 5, SenderId: this.token.SocketId, Message: message, Recipients: [peer.SocketId] }));
+                this.socket.send(JSON.stringify({ Type: 5, SenderId: this.token.PeerId, Message: message, Recipients: [peer.PeerId] }));
             }
 
 
@@ -362,14 +361,14 @@
             }
             updatePeer(peer) {
 
-                if (peer.SocketId == this.token.SocketId) {
+                if (peer.PeerId == this.token.PeerId) {
                     this.token = peer;
                 }
-                if (peer.SocketId == this.hostToken.SocketId) {
+                if (peer.PeerId == this.hostToken.PeerId) {
                     this.hostToken = peer;
                 }
 
-                this.peerTokens[peer.SocketId] = peer;
+                this.peerTokens[peer.PeerId] = peer;
             }
             removePeers(peers) {
                 if (peers == null) {
@@ -381,7 +380,7 @@
                 }
             }
             removePeer(peer) {
-                delete this.peerTokens[peer.SocketId];
+                delete this.peerTokens[peer.PeerId];
             }
         }
     </script>
@@ -634,7 +633,7 @@
                             }
 
                             console.log("Sending to server");
-                            addChatMessage({ SenderId: chatSession.token.SocketId, Message: $textChatMessageForm.$value.value });
+                            addChatMessage({ SenderId: chatSession.token.PeerId, Message: $textChatMessageForm.$value.value });
                             chatSession.send(JSON.stringify({ Message: $textChatMessageForm.$value.value }));
 
                             $textChatMessageForm.$value.value = '';
@@ -650,8 +649,8 @@
                                 let update = updates[i];
                                 for (let j = 0; j < update.Peers.length; j++) {
                                     let peer = update.Peers[j];
-                                    let displayName = (peer.DisplayName == '') ? `[${peer.SocketId}]` : peer.DisplayName;
-                                    let isHost = peer.SocketId == chatSession.hostToken.SocketId;
+                                    let displayName = (peer.DisplayName == '') ? `[${peer.PeerId}]` : peer.DisplayName;
+                                    let isHost = peer.PeerId == chatSession.hostToken.PeerId;
                                     if (update.Status == 'connect' && isHost == false) {
                                         let content = `<div>${displayName} has joined the chat.</div>`;
                                         let $joinMessage = addChatStatus(content);
@@ -669,7 +668,7 @@
                         }
                         function chatSession_OnClose(event) {
                             if (chatSession.ending == true) {
-                                let action = (chatSession.token.SocketId == chatSession.hostToken.SocketId) ? 'ended' : 'left';
+                                let action = (chatSession.token.PeerId == chatSession.hostToken.PeerId) ? 'ended' : 'left';
                                 addChatStatus(`[You have ${action} the chat session.]`);
                                 setSessionState(false);
                             }
@@ -697,14 +696,14 @@
 
                             let introMessage = '';
                             let hostName = (chatSession.hostToken.DisplayName || 'Host');
-                            if (chatSession.token.SocketId == chatSession.hostToken.SocketId) {
+                            if (chatSession.token.PeerId == chatSession.hostToken.PeerId) {
                                 introMessage = `You (${hostName}) have started a text chat session.`;
                             }
                             else {
                                 introMessage = `You have joined ${hostName}'s chat.`;
                             }
                             $chatroom.$title.textContent = hostName + '\'s text chat';
-                            chatSession.peerTokens[chatSession.token.SocketId] = Object.assign({}, chatSession.token);
+                            chatSession.peerTokens[chatSession.token.PeerId] = Object.assign({}, chatSession.token);
                             clearChatHistory();
                             updateChatPeers();
 
@@ -764,7 +763,7 @@
                             for (let property in chatSession.peerTokens) {
 
                                 let peer = chatSession.peerTokens[property];
-                                let displayName = (peer.DisplayName == '') ? `[${peer.SocketId}]` : peer.DisplayName;
+                                let displayName = (peer.DisplayName == '') ? `[${peer.PeerId}]` : peer.DisplayName;
                                 let $peer = document.createElement('dt');
                                 $peer.classList.add('peer');
                                 if (peer == chatSession.hostToken) {
@@ -827,7 +826,7 @@
                                 content = `${messageData}`;
                             }
                             else {
-                                let peer = (messageData.SenderId == chatSession.token.SocketId) ? chatSession.token : chatSession.peerTokens[messageData.SenderId];
+                                let peer = (messageData.SenderId == chatSession.token.PeerId) ? chatSession.token : chatSession.peerTokens[messageData.SenderId];
                                 if (peer == null) {
                                     console.error('Unknown Participant. Socket ID: ' + messageData.SenderId);
                                     return;

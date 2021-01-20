@@ -20,9 +20,9 @@ namespace SimpleAPI_NetCore50.Controllers
         public IWebHostEnvironment HostingEnvironment { get; }
         private readonly ILogger<AssetsController> Logger;
         private readonly IConfiguration AppConfig;
-        private readonly Data.SimpleApiContext DatabaseContext;
+        private readonly Data.SimpleApiDBContext DatabaseContext;
 
-        public AssetsController(IWebHostEnvironment hostingEnvironment, ILogger<AssetsController> logger, IConfiguration configuration, Data.SimpleApiContext context)
+        public AssetsController(IWebHostEnvironment hostingEnvironment, ILogger<AssetsController> logger, IConfiguration configuration, Data.SimpleApiDBContext context)
         {
             HostingEnvironment = hostingEnvironment;
             Logger = logger;

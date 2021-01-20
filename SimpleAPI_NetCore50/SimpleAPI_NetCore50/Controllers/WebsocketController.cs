@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using SimpleAPI_NetCore50.Data;
+using SimpleAPI_NetCore50.Utilities;
 using SimpleAPI_NetCore50.Websockets;
 
 namespace SimpleAPI_NetCore50.Controllers
@@ -11,15 +12,15 @@ namespace SimpleAPI_NetCore50.Controllers
     [ApiController]
     public class WebsocketController : Controller
     {
-        private readonly SimpleApiContext DatabaseContext;
-        private readonly SocketSessionService ProgressSessionService;
-        private readonly SocketSessionService VideoSessionService;
+        private readonly SimpleApiDBContext DatabaseContext;
+        private readonly WebsocketSessionService ProgressSessionService;
+        private readonly WebsocketSessionService MessaginSessionService;
 
-        public WebsocketController(SimpleApiContext context, ProgressSocketSessionService progressSessionService, VideoSocketSessionService videoSessionService)
+        public WebsocketController(SimpleApiDBContext context, ProgressSocketSessionService progressSessionService, WebsocketSessionService messaginSessionService)
         {
             DatabaseContext = context;
             ProgressSessionService = progressSessionService;
-            VideoSessionService = videoSessionService;
+            MessaginSessionService = messaginSessionService;
         }
 
         [HttpGet("{sessionType}")]
@@ -36,7 +37,7 @@ namespace SimpleAPI_NetCore50.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult> OpenSessionPost(Schemas.SocketSessionRequest socketSessionRequest)
+        public async Task<ActionResult> OpenSessionPost(Models.WebsocketSessionRequest socketSessionRequest)
         {
             string sessionKey = this.PrepareSession(socketSessionRequest.SessionType, socketSessionRequest.UnitTotal);
 
@@ -45,33 +46,23 @@ namespace SimpleAPI_NetCore50.Controllers
 
         private string PrepareSession(string sessionType, int unitTotal = -1)
         {
-            List<ISessionAttribute> attributes = new List<ISessionAttribute>();
+            List<IProcessArtifact> attributes = new List<IProcessArtifact>();
 
-            WebsocketSessionType type = SocketSession.GetSessionType(sessionType);
-            if (type == WebsocketSessionType.Unknown)
-            {
-                throw new Exception("Unknown Session Type: " + sessionType);
-            }
+            WebsocketSessionType type = WebsocketSession.GetSessionType(sessionType);
 
             if (type == WebsocketSessionType.Progress)
             {
                 if(unitTotal > -1)
                 {
-                    attributes.Add(new SessionAttribute<int>("unitTotal", unitTotal));
+                    attributes.Add(new ProcessArtifact<int>("unitTotal", unitTotal));
                 }
                 string sessionKey = ProgressSessionService.PrepareNewSession(attributes.ToArray());
                 return sessionKey;
             }
-            else if (type == WebsocketSessionType.Message)
+            else if (type == WebsocketSessionType.Messaging)
             {
-                //attributes.Add(new SessionAttribute<List<Schemas.SocketSessionMessageRequest>>("message", new List<Schemas.SocketSessionMessageRequest>()));
-                //string sessionKey = ProgressSessionService.PrepareNewSession(attributes.ToArray());
-                //return sessionKey;
-            }
-            else if(type == WebsocketSessionType.Stream)
-            {
-                attributes.Add(new SessionAttribute<List<Schemas.SocketSessionMessageResponse>>("messages", new List<Schemas.SocketSessionMessageResponse>()));
-                string sessionKey = VideoSessionService.PrepareNewSession(attributes.ToArray());
+                attributes.Add(new ProcessArtifact<List<Models.WebsocketSessionMessageResponse>>("messages", new List<Models.WebsocketSessionMessageResponse>()));
+                string sessionKey = MessaginSessionService.PrepareNewSession(attributes.ToArray());
                 return sessionKey;
             }
 

@@ -5,23 +5,22 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Net.WebSockets;
+using SimpleAPI_NetCore50.Utilities;
 
 namespace SimpleAPI_NetCore50.Websockets
 {
     public enum WebsocketSessionType
     {
-        Unknown,
+        Messaging,
         Progress,
-        Message,
-        Stream
     }
 
-    public class SocketSession
+    public class WebsocketSession
     {
         public WebsocketSessionType SessionType;
         public string SessionKey;
-        private ConcurrentDictionary<string, SessionSocket> Sockets = new ConcurrentDictionary<string, SessionSocket>();
-        private ConcurrentDictionary<string, ISessionAttribute> Attributes = new ConcurrentDictionary<string, ISessionAttribute>();
+        private ConcurrentDictionary<string, WebsocketSessionPeer> Peers = new ConcurrentDictionary<string, WebsocketSessionPeer>();
+        private ConcurrentDictionary<string, IProcessArtifact> Attributes = new ConcurrentDictionary<string, IProcessArtifact>();
 
         public static WebsocketSessionType GetSessionType(string typeName)
         {
@@ -29,49 +28,40 @@ namespace SimpleAPI_NetCore50.Websockets
             {
                 return WebsocketSessionType.Progress;
             }
-            if (String.Equals(typeName, "message", StringComparison.CurrentCultureIgnoreCase))
-            {
-                return WebsocketSessionType.Message;
-            }
-            if (String.Equals(typeName, "stream", StringComparison.CurrentCultureIgnoreCase))
-            {
-                return WebsocketSessionType.Stream;
-            }
-
-            return WebsocketSessionType.Unknown;
+            return WebsocketSessionType.Messaging;
         }
 
-        public SessionSocket GetSocketById(string id)
+        public WebsocketSessionPeer GetPeerById(string id)
         {
-            return Sockets.FirstOrDefault(pair => pair.Key == id).Value;
+            return Peers.FirstOrDefault(pair => pair.Key == id).Value;
         }
 
-        public ConcurrentDictionary<string, SessionSocket> GetSockets()
+        public ConcurrentDictionary<string, WebsocketSessionPeer> GetPeers()
         {
-            return Sockets;
+            return Peers;
         }
 
-        public string GetId(SessionSocket socket)
+        public string GetId(WebsocketSessionPeer socket)
         {
-            return Sockets.FirstOrDefault(pair => pair.Value == socket).Key;
+            return Peers.FirstOrDefault(pair => pair.Value == socket).Key;
         }
 
-        public SessionSocket AddWebSocket(WebSocket socket)
+        public WebsocketSessionPeer AddPeer(WebSocket socket)
         {
-            string id = CreateSocketId();
-            SessionSocket sessionSocket = new SessionSocket(id, socket);
-            Sockets.TryAdd(id, sessionSocket);
-            return sessionSocket;
+            string id = CreatePeerId();
+            WebsocketSessionPeer peer = new WebsocketSessionPeer(id, socket);
+            Peers.TryAdd(id, peer);
+            return peer;
         }
 
-        public void AddSessionSocket(SessionSocket sessionSocket)
+        public void AddPeer(WebsocketSessionPeer peer)
         {
-            Sockets.TryAdd(CreateSocketId(), sessionSocket);
+            Peers.TryAdd(CreatePeerId(), peer);
         }
-        public async Task RemoveSessionSocket(string socketId)
+        public async Task RemovePeer(string socketId)
         {
-            SessionSocket socket;
-            Sockets.TryRemove(socketId, out socket);
+            WebsocketSessionPeer socket;
+            Peers.TryRemove(socketId, out socket);
 
             if (socket != null && socket.Socket.State != WebSocketState.Closed)
             {
@@ -81,33 +71,33 @@ namespace SimpleAPI_NetCore50.Websockets
 
         public async Task CloseAsync(WebSocketCloseStatus closeStatus, string statusDescription, CancellationToken cancellationToken)
         {
-            IEnumerable<Task> tasks = Sockets.Select(pair => RemoveSessionSocket(pair.Value.Token.SocketId));
+            IEnumerable<Task> tasks = Peers.Select(pair => RemovePeer(pair.Value.Token.PeerId));
             await Task.WhenAll(tasks);
         }
        
 
         public T GetAttributeValue<T>(string name)
         {
-            ISessionAttribute attribute = this.Attributes[name];
+            IProcessArtifact attribute = this.Attributes[name];
             object value = attribute.Data;
             return (T) value;
         }
         public object GetAttributeValue(string name)
         {
-            ISessionAttribute attribute = this.Attributes[name];
+            IProcessArtifact attribute = this.Attributes[name];
             var value = Convert.ChangeType(attribute.Data, attribute.DataType);
 
             return value;
         }
-        public ConcurrentDictionary<string, ISessionAttribute> GetAttributePairs()
+        public ConcurrentDictionary<string, IProcessArtifact> GetAttributePairs()
         {
             return this.Attributes;
         }
-        public ISessionAttribute GetAttribute(string name)
+        public IProcessArtifact GetAttribute(string name)
         {
             return this.Attributes[name];
         }
-        public ConcurrentDictionary<string, ISessionAttribute> GetAttributes()
+        public ConcurrentDictionary<string, IProcessArtifact> GetAttributes()
         {
             return this.Attributes;
         }
@@ -115,22 +105,22 @@ namespace SimpleAPI_NetCore50.Websockets
         {
             this.AddOrUpdateAttribute(name, value);
         }
-        public void SetAttributes(IEnumerable<ISessionAttribute> attributes)
+        public void SetAttributes(IEnumerable<IProcessArtifact> attributes)
         {
-            foreach (ISessionAttribute attribute in attributes)
+            foreach (IProcessArtifact attribute in attributes)
             {
                 this.AddOrUpdateAttribute(attribute.Name, attribute.Data);
             }
         }
 
-        private string CreateSocketId()
+        private string CreatePeerId()
         {
             return Guid.NewGuid().ToString();
         }
 
         private void AddOrUpdateAttribute(string name, object value)
         {
-            ISessionAttribute attribute = null;
+            IProcessArtifact attribute = null;
 
             try
             {
@@ -143,7 +133,7 @@ namespace SimpleAPI_NetCore50.Websockets
                 this.Attributes.TryRemove(name, out attribute); // delete existing attribute to remake it; simpler than updating generic types;
             }
 
-            this.Attributes.TryAdd(name, SessionAttribute.Create(name, value));
+            this.Attributes.TryAdd(name, ProcessArtifact.Create(name, value));
         }
     }
 }

@@ -25,10 +25,10 @@ namespace SimpleAPI_NetCore50.Controllers
     {
         private readonly ILogger<StreamingController> Logger;
         private readonly IConfiguration AppConfig;
-        private readonly SimpleApiContext DatabaseContext;
+        private readonly SimpleApiDBContext DatabaseContext;
         private readonly ProgressSocketSessionService ProgressSessionService;
 
-        public StreamingController(ILogger<StreamingController> logger, IConfiguration configuration, SimpleApiContext context, ProgressSocketSessionService progressSessionService)
+        public StreamingController(ILogger<StreamingController> logger, IConfiguration configuration, SimpleApiDBContext context, ProgressSocketSessionService progressSessionService)
         {
             Logger = logger;
             AppConfig = configuration;

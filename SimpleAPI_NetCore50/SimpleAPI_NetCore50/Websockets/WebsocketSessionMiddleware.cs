@@ -10,20 +10,21 @@ using System.Net.WebSockets;
 
 namespace SimpleAPI_NetCore50.Websockets
 {
-    public class SocketMiddleware
+    public class WebsocketSessionMiddleware
     {
         protected readonly RequestDelegate _next;
 
 
-        protected readonly ILogger<SocketMiddleware> Logger;
-        protected SocketSessionService SessionService { get; set; }
+        protected readonly ILogger<WebsocketSessionMiddleware> Logger;
+        protected WebsocketSessionService SessionService { get; set; }
 
-        public SocketMiddleware(RequestDelegate next, ILogger<SocketMiddleware> logger, SocketSessionService socketSessionService)
+        public WebsocketSessionMiddleware(RequestDelegate next, ILogger<WebsocketSessionMiddleware> logger, WebsocketSessionService socketSessionService)
         {
             _next = next;
             Logger = logger;
             SessionService = socketSessionService;
         }
+
 
         public virtual async Task Invoke(HttpContext context)
         {
@@ -43,25 +44,40 @@ namespace SimpleAPI_NetCore50.Websockets
                 return;
             }
 
-            SessionSocket sessionSocket = await SessionService.JoinSession(context, "unknown", sessionKey);
+            WebsocketSessionPeer peer = await SessionService.JoinSession(context, "stream", sessionKey);
 
-            await Receive(sessionSocket.Socket, async (result, buffer) =>
+            await Receive(peer.Socket, async (result, buffer) =>
             {
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
-                    await SessionService.ReceiveMessage(sessionKey, sessionSocket, result, buffer);
+                    await ((WebsocketSessionService)SessionService).ReceiveMessage(sessionKey, peer, result, buffer);
                     return;
                 }
                 else if (result.MessageType == WebSocketMessageType.Close)
                 {
-                    await SessionService.EndSession(sessionKey);
-                    return;
+
+                    WebsocketSession targetSession = SessionService.GetSessionByKey(sessionKey);
+                    string hostId = targetSession.GetAttributeValue<string>("hostId");
+
+                    // if the host quit, kill the session
+                    if (peer.Token.PeerId == hostId)
+                    {
+                        await SessionService.EndSession(sessionKey);
+                        return;
+                    }
+
+                    // otherwise, disconnect and alert host that someone has disconnected
+                    await targetSession.RemovePeer(peer.Token.PeerId);
+                    Models.WebsocketSessionUpdate[] updates = WebsocketSessionService.CreatePeerUpdates(Models.WebsocketSessionUpdateStatus.Disconnect, peer.Token);
+                    Models.WebsocketSessionMessageResponse response = WebsocketSessionService.CreateWebsocketResponseMessage(Models.WebsocketSessionMessageType.StatusUpdates, updates);
+                    SessionService.SendMessageToPeers(sessionKey, peer.Token.PeerId, response);
                 }
 
             });
 
             await _next.Invoke(context);
         }
+
         protected virtual async Task Receive(WebSocket socket, Action<WebSocketReceiveResult, byte[]> handleMessage)
         {
             var buffer = new byte[1024 * 20];

@@ -1,7 +1,6 @@
-﻿
-namespace SimpleAPI_NetCore50.Schemas
+﻿namespace SimpleAPI_NetCore50.Models
 {
-    public class SocketError
+    public class WebsocketSessionError
     {
         public string ErrorCode { get; set; }
         public string Message { get; set; }
