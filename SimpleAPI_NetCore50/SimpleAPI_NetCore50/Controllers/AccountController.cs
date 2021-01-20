@@ -83,7 +83,13 @@ namespace SimpleAPI_NetCore50.Controllers
             IdentityResult result = await AccountManager.CreateAsync(account, model.Password);
             if (!result.Succeeded)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, new Models.AuthResponse { Status = "Error", Message = "Account creation failed! Please check request details and try again." });
+                string errorMessage = "Account creation failed! Please check request details and try again.";
+                foreach (var error in result.Errors)
+                {
+                    errorMessage += Environment.NewLine;
+                    errorMessage += "  - " + error.Description;
+                }
+                return StatusCode(StatusCodes.Status500InternalServerError, new Models.AuthResponse { Status = "Error", Message = errorMessage });
             }
 
             await this.SanitizeRole(model);

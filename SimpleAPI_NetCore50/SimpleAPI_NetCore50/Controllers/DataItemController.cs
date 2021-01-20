@@ -47,7 +47,15 @@ namespace SimpleAPI_NetCore50.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> PutRecord(string id, DataItem dataItem)
         {
-            if (id != dataItem.Id)
+            if(id == null)
+            {
+                return BadRequest();
+            }
+            if(dataItem.Id == null)
+            {
+                dataItem.Id = id;
+            }
+            if (dataItem.Id != null && id != dataItem.Id)
             {
                 return BadRequest();
             }
