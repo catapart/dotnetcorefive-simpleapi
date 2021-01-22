@@ -567,6 +567,8 @@ main > .content .card .setup
     grid-row-start: 1;
     grid-column-start: 1;
     transition: opacity 200ms linear, visibility 200ms linear;
+    max-width: 900px;
+    justify-self:center;
 }
 main > .content .card .chatroom.in-session ~ .setup
 {
@@ -619,6 +621,12 @@ main > .content .card .setup .display .label
     align-self:stretch;
 }
 
+main > .content .card .setup .display form
+{
+    display: flex;
+    align-self:stretch;
+}
+
 main > .content .card .setup .display input
 {
     background-color: #fff;
@@ -626,7 +634,7 @@ main > .content .card .setup .display input
     border-radius: 0;
     margin-bottom: .25em;
     border: none;
-    align-self:stretch;
+    flex: 1;
 }
 
 main > .content .card .setup .choice
@@ -638,10 +646,12 @@ main > .content .card .setup .choice
 
 main > .content .card .setup .choice .control
 {
-    display:grid;
-    grid-template-columns: 1fr max-content;
-    grid-template-rows: max-content auto;
     margin-bottom: .5em;
+}
+
+main > .content .card .setup .choice .control form
+{
+    display: flex;
 }
 
 main > .content .card .setup .choice .label
@@ -925,14 +935,6 @@ main > .content .card.file-upload
     color: #aaa;
     cursor: not-allowed;
 }
-/*#file-upload-form > .progress-controls button[disabled] .icon
-{
-    border-right-color: currentColor;
-}
-#file-upload-form > .progress-controls button[disabled] .icon path
-{
-    fill: currentColor;
-}*/
 
 #file-upload-form > .progress-controls button .icon
 {
@@ -988,4 +990,392 @@ main > .content .card.video-chat
 {
     grid-column: 1/3;
     --theme-gradient: linear-gradient(to bottom, #ab3f84 0%, #5e29a0 100%);
+    max-height: 800px;
+}
+
+main > .content .card.video-chat .display
+{
+    display:grid;
+    height: auto;
+}
+
+main > .content .card.video-chat .display
+{
+    display:flex;
+}
+
+main > .content .card.video-chat .display .stage
+{
+    flex: 1;
+    padding-left: 1em;
+    padding-top: 1em;
+}
+
+#priority-video-stream
+{
+    display: none;
+}
+.priority-selected #priority-video-stream
+{
+    display: block;
+}
+
+#video-streams
+{
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+#video-streams .video-stream
+{
+    /*width="544" height="306"*/
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    justify-items: center;
+    margin-right: 1em;
+    margin-bottom: 1em;
+    max-width: 544px;
+}
+
+#priority-video-stream video
+,#video-streams .video-stream video
+{
+    /*width="544" height="306"*/
+    min-width: 100px;
+    max-width: 100%;
+    max-height: 100%;
+    z-index: 0;
+    grid-column-start: 1;
+    grid-row-start: 1;
+}
+
+#video-streams .video-stream .set-priority
+{
+    appearance: none;
+    background: none;
+    border: none;
+    grid-column-start: 1;
+    grid-row-start: 1;
+    z-index: 1;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    position: relative;
+}
+#video-streams .video-stream .set-priority:hover
+{
+    background: none;
+    border: none;
+}
+#video-streams .video-stream .set-priority:focus
+,#video-streams .video-stream .set-priority:focus-visible
+,#video-streams .video-stream .set-priority:active
+{
+    outline-color: #ab3f84;
+}
+
+#video-streams .video-stream .set-priority:before
+{
+    content:attr(data-peer-name);
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    border-radius: 30px;
+    background-color: rgba(0,0,0,.3);
+    padding: .1em 1em;
+    font-size: .7em;
+    margin-bottom: .5em;
+    transform: translate(-50%);
+    opacity: 0;
+    transition: opacity 0.2s 1s linear;
+    display: inline-block;
+}
+#video-streams .video-stream .set-priority:hover:before
+{
+    transition: opacity 0.2s .001s linear;
+    opacity: 1;
+}
+
+
+
+#video-streams .video-stream .description
+{
+    display: none; /* this will trigger the opacity animation on the initial insert */
+    z-index: 0;
+    grid-column-start: 1;
+    grid-row-start: 1;
+    align-self: flex-end;
+    transition-delay: 1s;
+    opacity: 0;
+}
+
+
+main > .content .card.video-chat .display .stage .overlay
+{
+    grid-column-start: 1;
+    grid-row-start: 1;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+#status-pill
+{
+    border-radius: 30px;
+    background-color: rgba(255, 255, 255, .7);
+    display: flex;
+    align-items: center;
+    padding: .2em 1em;
+    font-size: .6em;
+    font-family: 'Vegur Light', 'Open Sans', sans-serif;
+    margin-bottom: .5em;
+}
+
+#status-pill .no-session
+{
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
+#status-pill.in-session .no-session
+{
+    display: none;
+}
+
+#status-pill .session
+{
+    display: none;
+}
+#status-pill.in-session .session
+{
+    display: flex;
+}
+
+#status-pill .icon
+{
+    width: 16px;
+    height: 16px;
+    margin-right: 1em;
+}
+
+#status-pill .count
+{
+    margin-right: .5ch;
+}
+
+main > .content .card.video-chat .display > aside
+{
+    font-size: 14pt;
+    background-color: #1f1f1f;
+    color: #999;
+}
+
+main > .content .card.video-chat .display > aside .panels
+{
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+main > .content .card.video-chat .display > aside .panels ul
+{
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+main > .content .card.video-chat .display > aside .panels .panel.peers li:hover
+{
+    color: #aaa;
+}
+
+main > .content .card.video-chat .display > aside .panels .panel.messages
+{
+    flex: 1;
+}
+
+
+
+#video-messages
+{
+    list-style:none;
+    margin: 0;
+    padding: .5em 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+#video-messages li
+{
+    scroll-margin: .5em;
+}
+#video-messages li:last-of-type
+{
+    margin-bottom: 0;
+}
+
+#video-messages .status
+{
+    background: var(--theme-gradient);
+    border: solid 1px #111;
+    font-size: .8em;
+    padding: .1em 1em;
+    border-radius: 30px;
+    color: #fff;
+    text-align:center;
+    margin-bottom: .5em;
+}
+
+/*#video-messages .session-key
+{
+    display: flex;
+    align-items: center;
+    font-size: .6em;
+    padding: .3em .9em;
+    background: linear-gradient(to bottom, #282424, #282121);
+    border: solid 1px #111;
+}
+
+#video-messages .session-key .description
+{
+    margin-right: .2em;
+}
+
+#video-messages .session-key .value
+{
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    margin-right: 1em;
+    width: 8ch;
+}
+
+#video-messages .session-key .copy
+{
+    font-family: inherit;
+    padding: .1em 1em;
+    border-radius: 5px;
+}*/
+
+#video-messages .message
+{
+    align-self:flex-start;
+    color:#fff;
+    display: flex;
+    flex-direction: column;
+    background: rgba(0,0,0,.25);
+    padding: .25em .5em;
+    border-radius: 5px;
+    margin-right: 1em;
+    margin-bottom: .5em;
+}
+#video-messages .message.self
+{
+    align-self: flex-end;
+    background: rgba(0,0,0,.4);
+    margin-right: 0;
+    margin-left: 1em;
+}
+
+#video-messages .message > header
+{
+    font-size: .7em;
+    font-family: Vegur, 'Open Sans', sans-serif;
+}
+
+#video-messages .message > .content
+{
+    font-size: .8em;
+    min-width: 75px;
+}
+
+main > .content .card .chatroom > form
+{
+}
+
+main > .content .card.video-chat .display > aside .panels .panel.messages form input
+{
+    border-radius: 30px;
+    border:none;
+    font-family: 'Vegur Light', 'Open Sans', sans-serif;
+    width: 100%;
+    padding: .2em 1em;
+}
+
+main > .content .card.video-chat .display > aside .panels .panel > header
+{
+    background-color: rgba(0,0,0,.3);
+    color: #aaa;
+    font-family: Vegur, 'Open Sans', sans-serif;
+    padding: .1em .5em;
+}
+
+main > .content .card.video-chat .display > aside .panels .panel > .content
+{
+    min-height: 80px;
+    overflow: auto;
+    padding: .5em;
+}
+
+main > .content .card.video-chat .display > aside .panels .panel.peers > .content
+{
+    max-height: 200px;
+}
+main > .content .card.video-chat .display > aside .panels .panel.messages > .content
+{
+    min-height: 200px;
+}
+
+#video-options
+{
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: space-evenly;
+}
+
+#video-options .option button
+{
+    background: none;
+    background-color: rgba(0,0,0,.4);
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items:center;
+    padding: .6em;
+}
+
+#video-options .option button .icon
+{
+    border: none;
+    padding-right: 0;
+    margin-right: 0;
+}
+
+#video-options .option button .icon path
+{
+    fill:rgba(255,255,255,.1);
+}
+#video-options .option.active button .icon path
+{
+    fill: #fff;
+}
+#video-options .option button:hover .icon path
+{
+    fill:rgba(255,255,255,.4);
 }
