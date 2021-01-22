@@ -475,28 +475,34 @@
                             <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M3.449 15.19c-.92-1.513-1.449-3.289-1.449-5.189 0-5.523 4.477-10.001 10-10.001s10 4.478 10 10.001c0 1.9-.529 3.676-1.451 5.189.513-1.156.797-2.434.797-3.78 0-5.163-4.184-9.347-9.346-9.347s-9.346 4.185-9.346 9.347c0 1.345.284 2.624.795 3.78zm3.108-3.78c0-3.006 2.438-5.442 5.443-5.442s5.443 2.437 5.443 5.443c0 .696-.133 1.362-.371 1.975.648-.969 1.025-2.132 1.025-3.384 0-3.368-2.73-6.099-6.098-6.099s-6.098 2.73-6.098 6.099c0 1.252.377 2.416 1.025 3.384-.237-.613-.369-1.279-.369-1.976zm6.443 2.59c1.162-.414 2-1.512 2-2.816 0-1.657-1.344-3-3-3s-3 1.343-3 3c0 1.304.838 2.403 2 2.816l-5 10h2.236c.713-1.426 2.17-2.326 3.764-2.326s3.051.9 3.764 2.326h2.236l-5-10zm-2.764 6l1.764-3.528 1.764 3.528h-3.528z" /></svg>
                             <span class="description">Host</span>
                         </span>
-                        <span class="display join">
+                        <div class="display join">
                             <svg class="icon" width="24" height="24" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M20 15c0 .552-.448 1-1 1s-1-.448-1-1 .448-1 1-1 1 .448 1 1m-3 0c0 .552-.448 1-1 1s-1-.448-1-1 .448-1 1-1 1 .448 1 1m-3 0c0 .552-.448 1-1 1s-1-.448-1-1 .448-1 1-1 1 .448 1 1m5.415 4.946c-1 .256-1.989.482-3.324.482-3.465 0-7.091-2.065-7.091-5.423 0-3.128 3.14-5.672 7-5.672 3.844 0 7 2.542 7 5.672 0 1.591-.646 2.527-1.481 3.527l.839 2.686-2.943-1.272zm-13.373-3.375l-4.389 1.896 1.256-4.012c-1.121-1.341-1.909-2.665-1.909-4.699 0-4.277 4.262-7.756 9.5-7.756 5.018 0 9.128 3.194 9.467 7.222-1.19-.566-2.551-.889-3.967-.889-4.199 0-8 2.797-8 6.672 0 .712.147 1.4.411 2.049-.953-.126-1.546-.272-2.369-.483m17.958-1.566c0-2.172-1.199-4.015-3.002-5.21l.002-.039c0-5.086-4.988-8.756-10.5-8.756-5.546 0-10.5 3.698-10.5 8.756 0 1.794.646 3.556 1.791 4.922l-1.744 5.572 6.078-2.625c.982.253 1.932.407 2.85.489 1.317 1.953 3.876 3.314 7.116 3.314 1.019 0 2.105-.135 3.242-.428l4.631 2-1.328-4.245c.871-1.042 1.364-2.384 1.364-3.75" /></svg>
                             <span class="description">Join</span>
                             <small class="label">Session Key</small>
-                            <input class="session-key" type="text" placeholder="xxxxx" title="Session Key" />
-                        </span>
-                        <span class="choice host">
-                            <span class="control">
+                            <form id="text-session-key-form">
+                                <input class="session-key" type="text" placeholder="xxxxx" title="Session Key" />
+                            </form>
+                        </div>
+                        <div class="choice host">
+                            <div class="control">
                                 <small class="label">Display Name</small>
-                                <input class="display-name" type="text" title="Display Name" value="Host" />
-                                <button class="action" type="button">Host Chat</button>
-                            </span>
+                                <form id="text-host-form">
+                                    <input class="display-name" type="text" title="Display Name" value="Host" />
+                                    <button class="action" type="submit">Host Chat</button>
+                                </form>
+                            </div>
                             <span class="message">This is an error</span>
-                        </span>
-                        <span class="choice join">
-                            <span class="control">
+                        </div>
+                        <div class="choice join">
+                            <div class="control">
                                 <small class="label">Display Name</small>
-                                <input class="display-name" type="text" title="Display Name" value="Guest" />
-                                <button class="action" type="button">Join Chat</button>
-                            </span>
+                                <form id="text-join-form">
+                                    <input class="display-name" type="text" title="Display Name" value="Guest" />
+                                    <button class="action" type="submit">Join Chat</button>
+                                </form>
+                            </div>
                             <span class="message">This is a really long error that should wrap to the next line and still be legible in all circumstances</span>
-                        </span>
+                        </div>
                     </div>
                 </div>
                 <script defer type="module">
@@ -528,11 +534,14 @@
                         const $chatSetup = document.querySelector('.card.chat .setup');
 
                         const $textHostDisplayName = $chatSetup.querySelector('.choice.host .display-name');
+                        const $textHostForm = document.getElementById('text-host-form');
                         const $textHostButton = $chatSetup.querySelector('.choice.host .action');
                         const $textHostErrorMessage = $chatSetup.querySelector('.choice.host .message');
 
+                        const $textSessionKeyForm = document.getElementById('text-session-key-form');
                         const $textGuestSessionKey = $chatSetup.querySelector('.display.join .session-key');
                         const $textGuestDisplayName = $chatSetup.querySelector('.choice.join .display-name');
+                        const $textJoinForm = document.getElementById('text-join-form');
                         const $textJoinButton = $chatSetup.querySelector('.choice.join .action');
                         const $textJoinErrorMessage = $chatSetup.querySelector('.choice.join .message');
 
@@ -540,15 +549,18 @@
 
                         // add functionality
                         $textExitButton.addEventListener('click', textExitChat_onClick);
-                        $textHostButton.addEventListener('click', textHostChat_onClick);
-                        $textJoinButton.addEventListener('click', textJoinChat_onClick);
+                        $textHostForm.addEventListener('submit', textHostChat_onSubmit);
+                        $textSessionKeyForm.addEventListener('submit', textJoinChat_onSubmit);
+                        $textJoinForm.addEventListener('submit', textJoinChat_onSubmit);
                         $textChatMessageForm.addEventListener('submit', textChatMessageForm_onSubmit);
 
                         // prepare page for new chat session
                         resetChat();
 
                         // handlers
-                        async function textHostChat_onClick(event) {
+                        async function textHostChat_onSubmit(event) {
+                            event.preventDefault();
+                            event.stopPropagation();
                             try {
                                 if (chatSession != null) {
                                     console.error('Session is already active. End the session before starting a new one.');
@@ -576,10 +588,13 @@
                             }
                             finally {
                                 _$messageDisplay = null;
+                                return false;
                             }
                         }
 
-                        async function textJoinChat_onClick(event) {
+                        async function textJoinChat_onSubmit(event) {
+                            event.preventDefault();
+                            event.stopPropagation();
                             try {
                                 if (chatSession != null) {
                                     console.error('Session is already active. End the session before starting a new one.');
@@ -606,8 +621,10 @@
                             }
                             finally {
                                 _$messageDisplay = null;
+                                return false;
                             }
                         }
+
                         async function textExitChat_onClick(event) {
                             if (chatSession == null) {
                                 return;
@@ -795,8 +812,8 @@
                             let $message = document.createElement('li');
                             $message.classList.add('session-key');
                             $message.innerHTML = `<span class="description">Session Key:</span>
-                                            <input class="value" type="text" />
-                                            <button class="copy" type="button" title="Copy Session Key">Copy</button>`;
+                                                            <input class="value" type="text" />
+                                                            <button class="copy" type="button" title="Copy Session Key">Copy</button>`;
 
                             const $value = $message.querySelector('.value');
                             $value.value = sessionKey;
@@ -842,26 +859,26 @@
                                 let userContent = '';
                                 if (peer != chatSession.token) {
                                     userContent = `<span class="user">
-                                                                                                                                                                <span class="image-container">
-                                                                                                                                                                    ${peer.IconUrl || `<svg class="icon user" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M12 2c2.757 0 5 2.243 5 5.001 0 2.756-2.243 5-5 5s-5-2.244-5-5c0-2.758 2.243-5.001 5-5.001zm0-2c-3.866 0-7 3.134-7 7.001 0 3.865 3.134 7 7 7s7-3.135 7-7c0-3.867-3.134-7.001-7-7.001zm6.369 13.353c-.497.498-1.057.931-1.658 1.302 2.872 1.874 4.378 5.083 4.972 7.346h-19.387c.572-2.29 2.058-5.503 4.973-7.358-.603-.374-1.162-.811-1.658-1.312-4.258 3.072-5.611 8.506-5.611 10.669h24c0-2.142-1.44-7.557-5.631-10.647z" /></svg>`}
-                                                                                                                                                                </span>
-                                                                                                                                                                <span class="name">${peer.DisplayName || 'Unknown Guest'}</span>
-                                                                                                                                                            </span>
-                                                                                                                                                            `;
+                                                                                                                                                                                <span class="image-container">
+                                                                                                                                                                                    ${peer.IconUrl || `<svg class="icon user" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M12 2c2.757 0 5 2.243 5 5.001 0 2.756-2.243 5-5 5s-5-2.244-5-5c0-2.758 2.243-5.001 5-5.001zm0-2c-3.866 0-7 3.134-7 7.001 0 3.865 3.134 7 7 7s7-3.135 7-7c0-3.867-3.134-7.001-7-7.001zm6.369 13.353c-.497.498-1.057.931-1.658 1.302 2.872 1.874 4.378 5.083 4.972 7.346h-19.387c.572-2.29 2.058-5.503 4.973-7.358-.603-.374-1.162-.811-1.658-1.312-4.258 3.072-5.611 8.506-5.611 10.669h24c0-2.142-1.44-7.557-5.631-10.647z" /></svg>`}
+                                                                                                                                                                                </span>
+                                                                                                                                                                                <span class="name">${peer.DisplayName || 'Unknown Guest'}</span>
+                                                                                                                                                                            </span>
+                                                                                                                                                                            `;
                                 }
                                 else {
                                     $message.classList.add('self');
                                 }
 
                                 content = `${userContent}<div class="body">
-                                                                                                                                                        <div class="content">
-                                                                                                                                                            ${messageData.Message}
-                                                                                                                                                        </div>
-                                                                                                                                                        <footer>
-                                                                                                                                                            <span class="date">${date}</span>
-                                                                                                                                                            <span class="time">${time}</span>
-                                                                                                                                                        </footer>
-                                                                                                                                                    </div>`;
+                                                                                                                                                                        <div class="content">
+                                                                                                                                                                            ${messageData.Message}
+                                                                                                                                                                        </div>
+                                                                                                                                                                        <footer>
+                                                                                                                                                                            <span class="date">${date}</span>
+                                                                                                                                                                            <span class="time">${time}</span>
+                                                                                                                                                                        </footer>
+                                                                                                                                                                    </div>`;
                             }
 
                             $message.innerHTML = content;
@@ -1109,7 +1126,7 @@
                     <h4>Video Chat</h4>
                 </header>
                 <div class="content">
-                    <div class="chatroom in-session">
+                    <div class="chatroom">
                         <header>
                             <div class="title">Host's Chatroom</div>
                             <button class="exit" type="button" disabled>
@@ -1123,17 +1140,14 @@
                                 <ul id="video-streams">
                                     <li class="video-stream">
                                         <video autoplay="autoplay" src="https://storage.coverr.co/videos/qo301lESiwxA01mnfLIEwtfHAGnxWzirQ6?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBJZCI6Ijg3NjdFMzIzRjlGQzEzN0E4QTAyIiwiaWF0IjoxNjExMTc4NjAxfQ.epzkpzjkQX6Az6r9TBJfnx0YAImP4rmvFGe55Koo63w"></video>
-                                        <!--<div class="description">Host</div>-->
                                         <button class="set-priority" type="button" data-peer-name="Host"></button>
                                     </li>
                                     <li class="video-stream">
                                         <video autoplay="autoplay" src="https://storage.coverr.co/videos/qo301lESiwxA01mnfLIEwtfHAGnxWzirQ6?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBJZCI6Ijg3NjdFMzIzRjlGQzEzN0E4QTAyIiwiaWF0IjoxNjExMTc4NjAxfQ.epzkpzjkQX6Az6r9TBJfnx0YAImP4rmvFGe55Koo63w"></video>
-                                        <!--<div class="description">Guest 1</div>-->
                                         <button class="set-priority" type="button" data-peer-name="Guest 1"></button>
                                     </li>
                                     <li class="video-stream">
                                         <video autoplay="autoplay" src="https://storage.coverr.co/videos/qo301lESiwxA01mnfLIEwtfHAGnxWzirQ6?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBJZCI6Ijg3NjdFMzIzRjlGQzEzN0E4QTAyIiwiaWF0IjoxNjExMTc4NjAxfQ.epzkpzjkQX6Az6r9TBJfnx0YAImP4rmvFGe55Koo63w"></video>
-                                        <!--<div class="description">Guest 2</div>-->
                                         <button class="set-priority" type="button" data-peer-name="Guest 2"></button>
                                     </li>
                                 </ul>
@@ -1221,28 +1235,28 @@
                             </form>
                         </div>
                         <div class="choice host">
-                            <span class="control">
+                            <div class="control">
                                 <small class="label">Display Name</small>
                                 <form id="video-host-form">
                                     <input class="display-name" type="text" title="Display Name" value="Host" />
                                     <button class="action" type="submit">Host Chat</button>
                                 </form>
-                            </span>
+                            </div>
                             <span class="message">This is an error</span>
                         </div>
                         <div class="choice join">
-                            <span class="control">
+                            <div class="control">
                                 <small class="label">Display Name</small>
                                 <form id="video-join-form">
                                     <input class="display-name" type="text" title="Display Name" value="Guest" />
                                     <button class="action" type="submit">Join Chat</button>
                                 </form>
-                            </span>
+                            </div>
                             <span class="message">This is a really long error that should wrap to the next line and still be legible in all circumstances</span>
                         </div>
                     </div>
                 </div>
-                <script defer type="module">
+                <!--<script defer type="module">
                     document.addEventListener('DOMContentLoaded', Init);
 
                     async function Init() {
@@ -1631,7 +1645,7 @@
                             $target.textContent = 'An error has occurred. Please see the console for more details.';
                         }
                     }
-                </script>
+                </script>-->
             </div>
 
         </div>

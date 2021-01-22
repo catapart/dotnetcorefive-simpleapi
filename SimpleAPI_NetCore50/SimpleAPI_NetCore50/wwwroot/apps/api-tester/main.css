@@ -660,15 +660,20 @@ main > .content .card .setup .choice .label
     display: block;
 }
 
+main > .content .card .setup .choice > form
+{
+    display: flex;
+}
+
 main > .content .card .setup .choice input
 {
     font-family: Vegur, 'Open Sans', sans-serif;
     background-color: #fff;
     border: solid 1px #666666;
     border-radius: 0;
-    grid-row-start:2;
     color: #232323;
-    min-width: 100px;
+    flex: 1;
+    min-width: 80px;
 }
 
 main > .content .card .setup .choice button
@@ -677,7 +682,6 @@ main > .content .card .setup .choice button
     color: #fff;
     border: none;
     border-radius: 0;
-    grid-row-start:2;
     font-size: .8em;
     padding: 0 .5em;
     margin-right: .25em;
