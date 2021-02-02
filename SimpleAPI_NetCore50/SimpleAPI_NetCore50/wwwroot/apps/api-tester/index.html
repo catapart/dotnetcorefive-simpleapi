@@ -275,6 +275,7 @@
                     if (this.token.PeerId == this.hostToken.PeerId) {
                         this.hostToken = token;
                     }
+                    this.peerTokens[token.PeerId] = token;
 
                     // update all other peers in the chat that you have joined
                     let update = { Status: 'connect', Peers: [token] };
@@ -718,7 +719,6 @@
                                 introMessage = `You have joined ${hostName}'s chat.`;
                             }
                             $chatroom.$title.textContent = hostName + '\'s text chat';
-                            chatSession.peerTokens[chatSession.token.PeerId] = Object.assign({}, chatSession.token);
                             clearChatHistory();
                             updateChatPeers();
 
@@ -1159,7 +1159,10 @@
                                             <span class="count">1</span> participants
                                         </span>
                                     </button>
-                                    <button id="video-session-key" type="button"></button>
+                                    <button id="video-session-key" type="button" title="Copy the session key">
+                                        <span class="description">Session Key:</span>
+                                        <span class="value"></span>
+                                    </button>
                                 </div>
                             </div>
                             <aside>
@@ -1204,14 +1207,19 @@
                                         <header>Controls</header>
                                         <div class="content">
                                             <ul id="video-options">
-                                                <li class="option toggle-audio" title="Toggle Audio">
+                                                <li id="video-toggle-audio" class="option toggle-audio" title="Mute/Unmute">
                                                     <button type="button">
                                                         <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M5 17h-5v-10h5v10zm2-10v10l9 5v-20l-9 5zm17 4h-5v2h5v-2zm-1.584-6.232l-4.332 2.5 1 1.732 4.332-2.5-1-1.732zm1 12.732l-4.332-2.5-1 1.732 4.332 2.5 1-1.732z" /></svg>
                                                     </button>
                                                 </li>
-                                                <li class="option toggle-video">
-                                                    <button type="button" title="Toggle Video">
+                                                <li id="video-toggle-webcam" class="option toggle-webcam">
+                                                    <button type="button" title="Toggle Webcam">
                                                         <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M17.387 18.581l3.613 5.419h-18l3.613-5.419c1.594.899 3.429 1.419 5.387 1.419s3.793-.52 5.387-1.419zm-5.387-11.581c-1.103 0-2 .897-2 2s.897 2 2 2 2-.897 2-2-.897-2-2-2zm9 2c0 4.971-4.029 9-9 9s-9-4.03-9-9 4.029-9 9-9 9 4.03 9 9zm-5 0c0-2.209-1.791-4-4-4s-4 1.791-4 4 1.791 4 4 4 4-1.791 4-4z" /></svg>
+                                                    </button>
+                                                </li>
+                                                <li id="video-toggle-screen" class="option toggle-screen">
+                                                    <button type="button" title="Toggle Screen Share">
+                                                        <svg class="icon" width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill-rule="evenodd" clip-rule="evenodd"><path d="M24 8.2c0-.318-.126-.623-.351-.849-.226-.225-.531-.351-.849-.351h-6.6c-.318 0-.623.126-.849.351-.225.226-.351.531-.351.849v13.6c0 .318.126.623.351.849.226.225.531.351.849.351h6.6c.318 0 .623-.126.849-.351.225-.226.351-.531.351-.849v-13.6zm-11 14.8h-8l2.599-3h5.401v3zm6.5-1c-.553 0-1-.448-1-1s.447-1 1-1c.552 0 .999.448.999 1s-.447 1-.999 1zm3.5-3v-9.024h-7v9.024h7zm-2-14h-2v-2h-17v13h11v2h-13v-17h21v4zm-.5 4c.276 0 .5-.224.5-.5s-.224-.5-.5-.5h-2c-.276 0-.5.224-.5.5s.224.5.5.5h2z" /></svg>
                                                     </button>
                                                 </li>
                                             </ul>
@@ -1256,13 +1264,19 @@
                         </div>
                     </div>
                 </div>
-                <!--<script defer type="module">
+                <script defer type="module">
                     document.addEventListener('DOMContentLoaded', Init);
 
                     async function Init() {
-                        // establish a well-known variable
-                        // to hold the websocket session
-                        let signalingSession = null;
+                        // unlike the text chat, the video chat will be P2P.
+                        // that means that all of the peer organization that is
+                        // done by the server to facilitate that session will need
+                        // to be recreated, here, so that the host client's javascript
+                        // can manage the video streaming peers.
+                        const videoChat = new VideoChat();
+                        videoChat.addEventListener('connected', videoSession_onConnected);
+                        videoChat.addEventListener('peers', videoSession_onPeers);
+                        videoChat.addEventListener('end', videoSession_onEnd);
 
                         // define well-known html elements
                         const $videoChatroom = document.querySelector('.card.video-chat .chatroom');
@@ -1270,17 +1284,21 @@
 
                         const $videoExitButton = $videoChatroom.querySelector('header > .exit');
 
+                        const $videoStreams = document.getElementById('video-streams');
+
                         const $videoPeers = document.getElementById('video-peers');
 
                         const $sessionStatusPill = document.getElementById('status-pill');
-                        $videoPeersPill.$count = $videoPeersPill.querySelector('.count');
+                        $sessionStatusPill.$count = $sessionStatusPill.querySelector('.count');
+
+                        const $sessionKeyPill = document.getElementById('video-session-key');
+                        $sessionKeyPill.$value = $sessionKeyPill.querySelector('.value');
+                        $sessionKeyPill.$input = document.createElement('input');
 
                         const $videoChatMessages = document.getElementById('video-messages');
-                        $videoChatMessages.$noSession = $videoChatMessages.querySelector('.no-session');
 
                         const $videoChatMessageForm = document.getElementById('video-chat-message');
                         $videoChatMessageForm.$value = $videoChatMessageForm.querySelector('input');
-                        $videoChatMessageForm.$submit = $videoChatMessageForm.querySelector('.submit');
 
                         const $videoChatSetup = document.querySelector('.card.video-chat .setup');
 
@@ -1296,34 +1314,79 @@
                         const $videoJoinButton = $videoChatSetup.querySelector('.choice.join .action');
                         const $videoJoinErrorMessage = $videoChatSetup.querySelector('.choice.join .message');
 
+                        const $videoToggleAudio = document.getElementById('video-toggle-audio');
+                        const $videoToggleWebcam = document.getElementById('video-toggle-webcam');
+                        const $videoToggleScreen = document.getElementById('video-toggle-screen');
+
+                        let $videoSessionKeyInput = null;
                         let _$videoMessageDisplay = null;
 
                         // add functionality
                         $videoExitButton.addEventListener('click', videoExitChat_onClick);
                         $videoHostForm.addEventListener('submit', videoHostSession_onSubmit);
-                        $videoSessionKeyForm.addEventListener('submit', videoSessionKeyForm_onSubmit);
+                        $videoSessionKeyForm.addEventListener('submit', videoJoinSession_onSubmit);
                         $videoJoinForm.addEventListener('submit', videoJoinSession_onSubmit);
                         $videoChatMessageForm.addEventListener('submit', videoChatMessageForm_onSubmit);
+                        $sessionKeyPill.addEventListener('click', sessionKeyPill_OnClick);
+
+                        $videoToggleAudio.addEventListener('click', videoToggleAudio_OnClick);
+                        $videoToggleWebcam.addEventListener('click', videoToggleWebcam_OnClick);
+                        $videoToggleScreen.addEventListener('click', videoToggleScreen_OnClick);
+
 
                         // prepare page for new chat session
-                        //resetVideoSession();
+                        resetVideoSession();
 
                         // handlers
+                        function videoSession_onConnected(event) {
+                            // wait until after connected to add a stream
+                            // if you are joining a session. 
+                            if (videoChat.isHost == false) {
+                                requestWebcam();
+                            }
+                        }
+                        function videoSession_onPeers(event) {
+                            updateVideoChatPeers();
+                            updateVideoChatStreams();
+
+                            // show messages
+                            let peersAdded = event.detail.added;
+                            for (let i = 0; i < peersAdded.length; i++) {
+                                let videoPeer = peersAdded[i];
+                                let peerToken = videoPeer.token;
+                                if (videoChat.isHost == false) {
+                                    let displayName = (peerToken.DisplayName == '') ? `[${peerToken.PeerId}]` : peerToken.DisplayName;
+                                    let content = `<div>${displayName} has joined the chat.</div>`;
+                                    let $joinMessage = addVideoChatStatus(content);
+                                }
+                            }
+
+                            let peersRemoved = event.detail.removed;
+                            for (let i = 0; i < peersRemoved.length; i++) {
+                                let videoPeer = peersRemoved[i];
+                                let peerToken = videoPeer.token;
+                                let displayName = (peerToken.DisplayName == '') ? `[${peerToken.PeerId}]` : peerToken.DisplayName;
+                                let action = (videoChat.isHost == true) ? 'ended' : 'left';
+                                let content = `<div>${displayName} has ${action} the chat.</div>`;
+                                let $leaveMessage = addVideoChatStatus(content);
+                            }
+                        }
+                        function videoSession_onEnd(event) {
+
+                            addVideoChatStatus(event.detail.closingMessage);
+                            clearVideoChatStreams();
+                            setVideoSessionState(false);
+                        }
+
                         async function videoHostSession_onSubmit(event) {
                             event.preventDefault();
                             event.stopPropagation();
                             try {
-                                if (signalingSession != null) {
-                                    console.error('Session is already active. End the session before starting a new one.');
-                                    return;
-                                }
-
                                 _$videoMessageDisplay = $videoHostErrorMessage;
 
                                 resetVideoSession();
 
-                                signalingSession = createSignalingSession();
-                                await signalingSession.host($videoHostDisplayName.value);
+                                await videoChat.host($videoHostDisplayName.value);
 
                                 prepareVideoSession();
 
@@ -1343,24 +1406,15 @@
                             }
                         }
 
-                        async function videoSessionKeyForm_onSubmit(event) {
-                            videoJoinSession_onSubmit(event);
-                            return false;
-                        }
                         async function videoJoinSession_onSubmit(event) {
                             event.preventDefault();
                             event.stopPropagation();
                             try {
-                                if (signalingSession != null) {
-                                    console.error('Session is already active. End the session before starting a new one.');
-                                    return;
-                                }
                                 _$videoMessageDisplay = $videoJoinErrorMessage;
 
                                 resetVideoSession();
 
-                                signalingSession = createSignalingSession();
-                                await signalingSession.join($videoGuestSessionKey.value, $videoGuestDisplayName.value);
+                                await videoChat.join($videoGuestSessionKey.value, $videoGuestDisplayName.value);
 
                                 prepareVideoSession();
 
@@ -1380,12 +1434,8 @@
                             }
                         }
                         async function videoExitChat_onClick(event) {
-                            if (signalingSession == null) {
-                                return;
-                            }
 
-                            signalingSession.ending = true;
-                            await signalingSession.close();
+                            await videoChat.endSession();
 
                             $videoHostButton.removeAttribute('disabled');
                             $videoJoinButton.removeAttribute('disabled');
@@ -1409,54 +1459,25 @@
                             return false;
                         }
 
-                        function signalingSession_OnPeers(event) {
-                            updateVideoChatPeers();
+                        function sessionKeyPill_OnClick(event) {
+                            copyTextToClipboard($sessionKeyPill.$value.textContent);
+                            addVideoChatStatus('Copied the Session Key');
+                        }
 
-                            // show messages
-                            let updates = event.detail;
-                            for (let i = 0; i < updates.length; i++) {
-                                let update = updates[i];
-                                for (let j = 0; j < update.Peers.length; j++) {
-                                    let peer = update.Peers[j];
-                                    let displayName = (peer.DisplayName == '') ? `[${peer.PeerId}]` : peer.DisplayName;
-                                    let isHost = peer.PeerId == signalingSession.hostToken.PeerId;
-                                    if (update.Status == 'connect' && isHost == false) {
-                                        let content = `<div>${displayName} has joined the chat.</div>`;
-                                        let $joinMessage = addVideoChatStatus(content);
-                                    }
-                                    else if (update.Status == 'disconnect') {
-                                        let action = (isHost == true) ? 'ended' : 'left';
-                                        let content = `<div>${displayName} has ${action} the chat.</div>`;
-                                        let $leaveMessage = addVideoChatStatus(content);
-                                    }
-                                }
-                            }
+                        function videoToggleAudio_OnClick(event) {
+                            toggleMute();
                         }
-                        function signalingSession_OnMessage(event) {
-                            addVideoChatMessage(event.detail);
+                        function videoToggleWebcam_OnClick(event) {
+                            toggleWebcam();
                         }
-                        function signalingSession_OnClose(event) {
-                            if (signalingSession.ending == true) {
-                                let action = (signalingSession.token.PeerId == signalingSession.hostToken.PeerId) ? 'ended' : 'left';
-                                addVideoChatStatus(`[You have ${action} the chat session.]`);
-                                setVideoSessionState(false);
-                            }
-                            else {
-                                addVideoChatStatus('[The chat session has been ended.]');
-                                setVideoSessionState(false);
-                            }
-                            signalingSession = null;
-                        }
-                        function signalingSession_OnError(event) {
-                            if (_$messageDisplay != null) {
-                                _$messageDisplay.textContent = "An error occurred while trying to connect to the session. If you are trying to join, please check the session key and try again."
-                            }
-                            console.log(event);
+                        function videoToggleScreen_OnClick(event) {
+                            toggleScreenShare();
                         }
 
                         // functionality
                         function resetVideoSession() {
                             setVideoSessionState(false);
+                            clearVideoChatStreams();
                             clearVideoChatHistory();
                             clearVideoChatErrors();
                         }
@@ -1464,46 +1485,86 @@
                             setVideoSessionState(true);
 
                             let introMessage = '';
-                            let hostName = (signalingSession.hostToken.DisplayName || 'Host');
-                            if (signalingSession.token.PeerId == signalingSession.hostToken.PeerId) {
-                                introMessage = `You (${hostName}) have started a text chat session.`;
+                            let hostName = (videoChat.signalingSession.hostToken.DisplayName || 'Host');
+                            if (videoChat.signalingSession.token.PeerId == videoChat.signalingSession.hostToken.PeerId) {
+                                introMessage = `You (${hostName}) have started a video chat session.`;
                             }
                             else {
                                 introMessage = `You have joined ${hostName}'s chat.`;
                             }
                             $videoChatroom.$title.textContent = hostName + '\'s text chat';
-                            signalingSession.peerTokens[signalingSession.token.PeerId] = Object.assign({}, signalingSession.token);
+                            videoChat.signalingSession.peerTokens[videoChat.signalingSession.token.PeerId] = Object.assign({}, videoChat.signalingSession.token);
                             clearVideoChatHistory();
                             updateVideoChatPeers();
 
-                            clearVideoChatHistory(introMessage);
-                            displayVideoSessionKey(signalingSession.sessionKey);
+                            addVideoChatStatus(introMessage);
+                            displayVideoSessionKey(videoChat.signalingSession.sessionKey);
+
+                            if (videoChat.isStreamingWebcam != true && videoChat.isHost == true) {
+                                requestWebcam();
+                            }
                         }
 
                         function setVideoSessionState(inSession) {
                             if (inSession == true) {
                                 $videoChatroom.classList.add('in-session');
-                                $videoChatMessageForm.$submit.removeAttribute('disabled');
-                                $sessionStatusPill.classList.add('in-session');
                             }
                             else {
                                 $videoChatroom.classList.remove('in-session');
-                                $sessionStatusPill.classList.remove('in-session');
                                 $videoChatroom.$title.textContent = '';
-                                clearVideoChatParticipants();
+                                clearVideoChatPeers();
                                 $videoHostButton.removeAttribute('disabled');
                                 $videoJoinButton.removeAttribute('disabled');
-                                $videoChatMessageForm.$submit.setAttribute('disabled', 'disabled');
                             }
                         }
 
-                        function createSignalingSession() {
-                            let session = new WebsocketSession();
-                            session.addEventListener('peers', signalingSession_OnPeers);
-                            session.addEventListener('message', signalingSession_OnMessage);
-                            session.addEventListener('close', signalingSession_OnClose);
-                            session.addEventListener('error', signalingSession_OnError);
-                            return session;
+                        function toggleWebcam() {
+                            if (videoChat.isStreamingWebcam == true) {
+                                videoChat.endWebcamStream();
+                            }
+                            else {
+                                requestWebcam();
+                            }
+                        }
+                        async function requestWebcam() {
+                            console.log('Requesting local webcam stream');
+                            try {
+                                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: 1280, height: 720 } });
+                                console.log('Received local webcam stream');
+                                videoChat.setLocalStream(stream);
+                            }
+                            catch (exception) {
+                                console.error(`getUserMedia() error: ${exception.name}`);
+                            }
+                        }
+
+                        function toggleMute() {
+                            if (muted == true) {
+                            }
+                            else {
+                                muteVideoSession();
+                            }
+                        }
+
+                        function toggleScreenShare() {
+                            if (isStreamingScreen == true) {
+                                videoChat.endScreenStream();
+                            }
+                            else {
+                                requestScreenStream();
+                            }
+                        }
+                        async function requestScreenStream() {
+                            console.log('Requesting local screen stream');
+                            try {
+                                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: 1280, height: 720 } });
+                                console.log('Received local screen stream');
+                                videoChat.clientPeer.setVideoSource(stream);
+                                videoChat.isStreamingWebcam = true;
+                            }
+                            catch (exception) {
+                                console.error(`getUserMedia() error: ${exception.name}`);
+                            }
                         }
 
                         function clearVideoChatErrors() {
@@ -1514,41 +1575,54 @@
                             while ($videoChatMessages.lastChild) {
                                 $videoChatMessages.lastChild.remove();
                             }
+                        }
+                        function updateVideoChatStreams() {
+                            clearVideoChatStreams();
 
-                            if (signalingSession == null) {
-                                $videoChatMessages.appendChild($videoChatMessages.$noSession);
+                            for (let property in videoChat.videoPeers) {
+
+                                let peer = videoChat.videoPeers[property];
+                                if (peer.token.PeerId == videoChat.hostPeer.token.PeerId) {
+                                    peer.$element.classList.add('host');
+                                }
+                                if (peer.token.PeerId == videoChat.clientPeer.token.PeerId) {
+                                    peer.$element.classList.add('self');
+                                }
+                                $videoStreams.appendChild(peer.$element);
                             }
                         }
-                        function clearVideoChatParticipants() {
-                            while ($videoPeers.lastChild) {
-                                $videoPeers.lastChild.remove();
+                        function clearVideoChatStreams() {
+                            while ($videoStreams.lastChild) {
+                                $videoStreams.lastChild.remove();
                             }
-
-                            $videoPeersPill.classList.remove('others');
-                            $videoPeersPill.$firstPeer.textContent = '';
-                            $videoPeersPill.$modifiedCount.textContent = '';
                         }
                         function updateVideoChatPeers() {
-                            clearVideoChatParticipants();
+                            clearVideoChatPeers();
 
-                            for (let property in signalingSession.peerTokens) {
+                            for (let property in videoChat.videoPeers) {
 
-                                let peer = signalingSession.peerTokens[property];
-                                let displayName = (peer.DisplayName == '') ? `[${peer.PeerId}]` : peer.DisplayName;
-                                let $peer = document.createElement('dt');
+                                let peer = videoChat.videoPeers[property];
+                                let displayName = (peer.token.DisplayName == '') ? `[${peer.token.PeerId}]` : peer.token.DisplayName;
+                                let $peer = document.createElement('li');
                                 $peer.classList.add('peer');
-                                if (peer == signalingSession.hostToken) {
+                                if (peer.token.PeerId == videoChat.hostPeer.token.PeerId) {
                                     $peer.classList.add('host');
                                 }
-                                if (peer == signalingSession.token) {
+                                if (peer.token.PeerId == videoChat.clientPeer.token.PeerId) {
                                     $peer.classList.add('self');
                                 }
                                 $peer.textContent = displayName;
                                 $videoPeers.appendChild($peer);
                             }
 
-                            let peerTokenCount = Object.keys(signalingSession.peerTokens)?.length
-                            $videoPeersPill.$count = peerTokenCount;
+                            let peerTokenCount = Object.keys(videoChat.videoPeers)?.length
+                            $sessionStatusPill.$count.textContent = peerTokenCount;
+                        }
+                        function clearVideoChatPeers() {
+                            while ($videoPeers.lastChild) {
+                                $videoPeers.lastChild.remove();
+                            }
+                            $sessionStatusPill.$count.textContent = '';
                         }
                         function addVideoChatStatus(statusMessage) {
                             let $message = document.createElement('li');
@@ -1560,29 +1634,7 @@
                         }
                         function displayVideoSessionKey(sessionKey) {
 
-                            let $message = document.createElement('li');
-                            $message.classList.add('session-key');
-                            $message.innerHTML = `<span class="description">Session Key:</span>
-                                                                            <input class="value" type="text" />
-                                                                            <button class="copy" type="button" title="Copy Session Key">Copy</button>`;
-
-                            const $value = $message.querySelector('.value');
-                            $value.value = sessionKey;
-                            const $copyButton = $message.querySelector('.copy');
-                            $copyButton.addEventListener('click', () => {
-
-                                if (signalingSession == null) {
-                                    console.error('Cannot copy session key from session that has not been started.');
-                                    return;
-                                }
-                                $value.select();
-                                $value.setSelectionRange(0, 99999);
-                                document.execCommand('copy');
-                                addVideoChatStatus('Copied the Session Key');
-                            });
-
-                            $videoChatMessages.appendChild($message);
-                            return $message;
+                            $sessionKeyPill.$value.textContent = sessionKey;
                         }
                         function addVideoChatMessage(messageData) {
                             let $message = document.createElement('li');
@@ -1598,39 +1650,15 @@
                                     console.error('Unknown Participant. Socket ID: ' + messageData.SenderId);
                                     return;
                                 }
-                                let currentDate = new Date();
-                                let date = (((currentDate.getMonth() + 1) < 10) ? '0' + (currentDate.getMonth() + 1) : (currentDate.getMonth() + 1)) + '/' + ((currentDate.getDate() < 10) ? '0' + currentDate.getDate() : currentDate.getDate()) + '/' + currentDate.getFullYear();
-                                let meridian = 'am';
-                                let hours = currentDate.getHours();
-                                if (hours > 12) {
-                                    meridian = 'pm';
-                                    hours = currentDate.getHours() - 12;
-                                }
-                                let time = (hours < 10 ? '0' + hours : hours) + ':' + currentDate.getMinutes() + ' ' + meridian;
-                                let userContent = '';
-                                if (peer != signalingSession.token) {
-                                    userContent = `<span class="user">
-                                                    <span class="image-container">
-                                                        ${peer.IconUrl || `<svg class="icon user" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M12 2c2.757 0 5 2.243 5 5.001 0 2.756-2.243 5-5 5s-5-2.244-5-5c0-2.758 2.243-5.001 5-5.001zm0-2c-3.866 0-7 3.134-7 7.001 0 3.865 3.134 7 7 7s7-3.135 7-7c0-3.867-3.134-7.001-7-7.001zm6.369 13.353c-.497.498-1.057.931-1.658 1.302 2.872 1.874 4.378 5.083 4.972 7.346h-19.387c.572-2.29 2.058-5.503 4.973-7.358-.603-.374-1.162-.811-1.658-1.312-4.258 3.072-5.611 8.506-5.611 10.669h24c0-2.142-1.44-7.557-5.631-10.647z" /></svg>`}
-                                                    </span>
-                                                    <span class="name">${peer.DisplayName || 'Unknown Guest'}</span>
-                                                </span>
-                                                `;
-                                }
-                                else {
+
+                                if (peer == signalingSession.token) {
                                     $message.classList.add('self');
                                 }
 
-                                content = `${userContent}
-                                            <div class="body">
-                                                <div class="content">
-                                                    ${messageData.Message}
-                                                </div>
-                                                <footer>
-                                                    <span class="date">${date}</span>
-                                                    <span class="time">${time}</span>
-                                                </footer>
-                                            </div>`;
+                                content = `<header><span class="name">${peer.DisplayName}</span></header>
+                                                                                                                                                                                                                                                                                                            <div class="content">
+                                                                                                                                                                                                                                                                                                                ${messageData.Message}
+                                                                                                                                                                                                                                                                                                            </div>`;
                             }
 
                             $message.innerHTML = content;
@@ -1644,8 +1672,793 @@
                             console.error(error);
                             $target.textContent = 'An error has occurred. Please see the console for more details.';
                         }
+
+                        function copyTextToClipboard(value) {
+                            if ($videoSessionKeyInput == null) {
+                                $videoSessionKeyInput = document.createElement('input');
+                                $videoSessionKeyInput.style.top = "-9000px";
+                                $videoSessionKeyInput.style.left = "-9000px";
+                                $videoSessionKeyInput.style.position = "fixed";
+                            }
+
+                            $videoSessionKeyInput.value = value;
+                            document.body.appendChild($videoSessionKeyInput);
+                            try {
+                                $videoSessionKeyInput.select();
+                                $videoSessionKeyInput.setSelectionRange(0, 99999);
+                                document.execCommand('copy');
+                            }
+                            catch (error) {
+                                console.error(error);
+                            }
+                            $videoSessionKeyInput.remove();
+                        }
                     }
-                </script>-->
+
+
+                    // this class abstracts that host management functionality
+                    // away from the UI interactions.
+                    class VideoChat {
+
+                        constructor() {
+                            // establish a well-known variable
+                            // to hold the websocket session
+                            this.signalingSession = this.createSignalingSession();
+
+                            this.resetState();
+
+                            this.configuration = {
+                                iceServers: [
+                                    {
+                                        urls: "stun:stun.stunprotocol.org" // this is an example server, but you should set up your own STUN/TURN servers
+                                    }
+                                ]
+                            };
+
+                            // easy event forwarding
+                            let node = document.createTextNode(null);
+                            this.addEventListener = node.addEventListener.bind(node);
+                            this.removeEventListener = node.removeEventListener.bind(node);
+                            this.dispatchEvent = node.dispatchEvent.bind(node);
+
+                            // create interface
+                            //this._createInterface();
+
+                            // state informtaion
+                            //this._skippedIntro = false;// internal helper
+                            //this._peerDescriptionIsSet = false;
+                        }
+                        resetState() {
+                            this.videoPeers = new Map();
+                            this.clientPeer = null;
+                            this.hostPeer = null;
+
+                            this.isHost = false;
+                            this.isStreamingWebcam = false;
+                            this.isStreamingMicrophone = false;
+                            this.isStreamingScreen = false;
+                            this.isMuted = false;
+
+                            this.hasPeerConnection = false;
+                        }
+                        _createInterface() {
+
+                            //let template = document.getElementById('video-chat-ui');
+                            //let templateContent = template.content;
+                            //this.$parentNode.appendChild(templateContent.cloneNode(true));
+
+                            //this.$videoPeers = document.getElementById('video-peers');
+                            //this.$clientWebcam = document.getElementById('client-webcam');
+                            //this.$videos = document.querySelector('.card.video-chat .videos');
+                            //this.$videoToasts = document.getElementById('toasts');
+                            //this.$videoDisplayName = document.getElementById('video-display-name');
+                            //this.$getWebcamButton = document.getElementById('get-webcam-feed');
+                            //this.$startVideoChatButton = document.getElementById('start-video-chat');
+                            //this.$endVideoChatButton = document.getElementById('end-video-chat');
+                            //this.$joinVideoChatButton = document.getElementById('join-video-chat');
+                            //this.$leaveVideoChatButton = document.getElementById('leave-video-chat');
+                            //this.$hostSessionKey = document.getElementById('host-session-key');
+                            //this.$guestSessionKey = document.getElementById('guest-session-key');
+
+                            //this.$getWebcamButton.addEventListener('click', this.getWebcam_onClick.bind(this));
+                            //this.$startVideoChatButton.addEventListener('click', this.startVideoChat_onClick.bind(this));
+                            //this.$endVideoChatButton.addEventListener('click', this.endVideoChat_onClick.bind(this));
+                            //this.$joinVideoChatButton.addEventListener('click', this.joinVideoChat_onClick.bind(this));
+                            //this.$leaveVideoChatButton.addEventListener('click', this.leaveVideoChat_onClick.bind(this));
+                        }
+
+                        // handlers
+                        signalingSession_OnPeers(event) {
+
+                            const { peersAdded, peersRemoved } = this.updateVideoPeers(false);
+
+                            const connections = [];
+                            const disconnections = [];
+                            const updates = event.detail;
+                            for (let i = 0; i < updates.length; i++) {
+                                let update = updates[i];
+                                console.log(update);
+
+                                for (let j = 0; j < update.Peers.length; j++) {
+                                    let peer = update.Peers[j];
+                                    let videoPeer = this.videoPeers.get(peer.PeerId);
+                                    if (videoPeer == null) {
+                                        continue;
+                                    }
+
+                                    if (update.Status == 'connect') {
+                                        connections.push(videoPeer);
+                                    }
+                                    else if (update.Status == 'disconnect') {
+                                        disconnections.push(videoPeer);
+                                    }
+                                }
+                            }
+
+                            this.updatePeerStreams(connections, disconnections);
+
+                            let actionEvent = new CustomEvent('peers', { detail: { peers: this.videoPeers.entries(), added: peersAdded, removed: peersRemoved } });
+                            this.dispatchEvent(actionEvent);
+
+                        }
+                        async signalingSession_OnMessage(event) {
+                            //addVideoChatMessage(event.detail);
+
+                            console.log(event);
+
+                            let message = event.detail;
+                            let data = JSON.parse(message.Message);
+                            if (message.SenderId == this.clientPeer.token.PeerId) {
+                                return;
+                            }
+
+                            if (data.type == 'candidate') {
+                                try {
+                                    let videoPeer = this.videoPeers.get(message.SenderId);
+                                    if (videoPeer != null) {
+                                        videoPeer.peerConnection.addIceCandidate(data.candidate);
+                                    }
+                                } catch (error) {
+                                    console.log(`Failed to add ice candidate: ${error.toString()}`);
+                                }
+                            }
+                            else if (data.type == 'offer') {
+                                await this.setPeerRemoteDescription(message.SenderId, data.offer);
+                                this.sendAnswer(message.SenderId);
+                            }
+                            else if (data.type == 'answer') {
+                                this.setPeerRemoteDescription(message.SenderId, data.answer);
+                                this.setPeerStream(message.SenderId);
+                            }
+                        }
+                        signalingSession_OnStatusUpdates(event) {
+                            //addVideoChatMessage(event.detail);
+                            console.log(event);
+                        }
+                        signalingSession_OnClose(event) {
+                            let closingMessage = '[The chat session has been ended.]';
+                            if (this.signalingSession.requestedEnd == true) {
+                                let action = (this.signalingSession.token.PeerId == this.signalingSession.hostToken.PeerId) ? 'ended' : 'left';
+                                closingMessage = `[You have ${action} the chat session.]`;
+                            }
+
+                            this.signalingSession = null;
+
+                            // dispatch events
+                            let actionEvent = new CustomEvent('end', { detail: { closingMessage } });
+                            this.dispatchEvent(actionEvent);
+                        }
+                        signalingSession_OnError(event) {
+                            //if (_$messageDisplay != null) {
+                            //    _$messageDisplay.textContent = "An error occurred while trying to connect to the session. If you are trying to join, please check the session key and try again."
+                            //}
+                            //console.log(event);
+                        }
+
+                        addPeer(peerToken) {
+                            const videoPeer = new VideoPeer(peerToken);
+                            videoPeer.addConnection(this.configuration, this.handle_ice_onConnected.bind(this), this.handle_ice_onCandidate.bind(this));
+                            this.videoPeers.set(peerToken.PeerId, videoPeer);
+
+                            if (this.clientPeer != null && this.clientPeer.stream != null) {
+                                videoPeer.setOutboundStream(this.clientPeer.stream);
+                            }
+                            return videoPeer;
+                        }
+
+                        async sendAnswer(peerId) {
+                            let videoPeer = this.videoPeers.get(peerId);
+                            // create answer
+                            console.log('createAnswer start');
+                            try {
+                                const answer = await videoPeer.peerConnection.createAnswer();
+                                console.log('answer created');
+
+                                console.log('set local peer description', videoPeer.token.PeerId);
+                                videoPeer.peerConnection.setLocalDescription(answer);
+                                let answerMessage = { type: 'answer', answer: answer };
+                                this.sendValue(answerMessage);
+
+                            } catch (error) {
+                                console.error(error);
+                            }
+                        }
+                        async setPeerRemoteDescription(peerId, description) {
+
+                            let videoPeer = this.videoPeers.get(peerId);
+                            if (videoPeer == null) {
+                                throw new Error('Unknown video peer sent offer');
+                            }
+
+                            try {
+                                console.log('setRemoteDescription start', videoPeer.token.PeerId);
+                                await videoPeer.peerConnection.setRemoteDescription(description);
+                                console.log(`setRemoteDescription complete`, videoPeer.token.PeerId);
+
+                            } catch (error) {
+                                console.log(`Failed to set remote session description: ${error.toString()}`);
+                            }
+                            //send event
+                        }
+
+                        setPeerStream(peerId, stream) {
+                            let videoPeer = this.videoPeers.get(peerId);
+                            if (videoPeer == null) {
+                                throw new Error('Unknown video peer sent offer');
+                            }
+
+                            stream = stream || videoPeer.stream;
+
+                            videoPeer.setVideoSource(stream);
+                        }
+                        setLocalStream(stream) {
+                            this.clientPeer.setVideoSource(stream);
+                            this.isStreamingWebcam = true;
+
+                            for (let [peerId, videoPeer] of this.videoPeers.entries()) {
+                                if (videoPeer != this.clientPeer) {
+                                    videoPeer.setOutboundStream(stream);
+                                }
+                            }
+                        }
+
+
+                        //chatSession_OnGreeting(event) {
+                        //    this.updateChatPeers();
+                        //    if (this.isHost == true) {
+                        //        this.$hostSessionKey.value = event.detail.SessionKey;
+                        //    }
+                        //}
+                        //async chatSession_OnPeers(event) {
+
+                        //    let updates = event.detail;
+                        //    for (let i = 0; i < updates.length; i++) {
+                        //        let update = updates[i];
+
+                        //        for (let j = 0; j < update.Peers.length; j++) {
+                        //            let peer = update.Peers[j];
+                        //            let displayName = (peer.DisplayName == '') ? `[${peer.SocketId}]` : peer.DisplayName;
+                        //            let peerIsHost = peer.SocketId == this.chatSession.hostToken.SocketId;
+                        //            if (update.Status == 'connect') {
+
+                        //                // create peer connection
+                        //                let videoPeer = this.addPeer(peer.SocketId);
+                        //                videoPeer.addConnection(this, peer.SocketId, this.configuration);
+                        //                videoPeer.$peer.$title.textContent = peer.DisplayName || peer.SocketId;
+
+                        //                try {
+                        //                    // create offer
+                        //                    const offerOptions = {
+                        //                        offerToReceiveAudio: 1,
+                        //                        offerToReceiveVideo: 1
+                        //                    };
+
+                        //                    console.log('localPeerConnection createOffer start');
+                        //                    let offer = await videoPeer.peerConnection.createOffer(offerOptions);
+                        //                    //console.log(`Offer from peerConnection\n${this.peerOffer.sdp}`);
+
+                        //                    // set description
+                        //                    console.log('peerConnection setLocalDescription start');
+                        //                    try {
+                        //                        await videoPeer.peerConnection.setLocalDescription(offer);
+                        //                        console.log(`setLocalDescription complete`);
+                        //                    } catch (error) {
+                        //                        console.log(`Failed to set session description: ${error.toString()}`);
+                        //                    }
+
+                        //                    // send offer to peer
+                        //                    let offerMessage = { type: 'offer', offer: offer };
+                        //                    this.sendValue(offerMessage, null, message.SenderId);
+                        //                } catch (error) {
+                        //                    console.log(`Failed to create offer: ${error.toString()}`);
+                        //                }
+                        //            }
+                        //            else if (update.Status == 'disconnect') {
+                        //                let videoPeer = this.videoPeers[peer.SocketId];
+                        //                videoPeer.closeConnection();
+                        //                videoPeer.$peer.remove();
+
+                        //                delete this.videoPeers[peer.SocketId];
+                        //                let action = (peerIsHost == true) ? 'ended' : 'left';
+                        //                let content = `<div>${displayName} has ${action} the chat.</div>`;
+                        //                let $leaveMessage = this.showChatMessage(content);
+                        //                $leaveMessage.classList.add('status');
+                        //            }
+                        //        }
+                        //    }
+
+                        //    this.updateChatPeers();
+                        //}
+                        //async chatSession_OnMessage(event) {
+
+                        //    console.log(event);
+
+                        //    let message = event.detail;
+                        //    let data = JSON.parse(message.Message);
+                        //    if (message.SenderId == this.chatSession.token.SocketId) {
+                        //        return;
+                        //    }
+
+                        //    if (data.type == 'candidate') {
+                        //        try {
+                        //            let videoPeer = this.getPeer(message.SenderId);
+                        //            if (videoPeer != null) {
+                        //                videoPeer.peerConnection.addIceCandidate(data.candidate);
+                        //            }
+                        //        } catch (error) {
+                        //            console.log(`Failed to add ice candidate: ${error.toString()}`);
+                        //        }
+                        //    }
+                        //    else if (data.type == 'offer') {
+
+                        //        let videoPeer = this.getPeer(message.SenderId);
+                        //        if (videoPeer == null) {
+                        //            videoPeer = this.addPeer(message.SenderId);
+                        //            videoPeer.addConnection(this, message.SenderId, data.configuration);
+                        //            videoPeer.$peer.$title.textContent = this.chatSession.peerTokens[message.SenderId]?.DisplayName || message.SenderId;
+                        //        }
+
+                        //        try {
+                        //            console.log('setRemoteDescription start');
+                        //            await videoPeer.peerConnection.setRemoteDescription(data.offer);
+                        //            console.log(`setRemoteDescription complete`);
+
+                        //        } catch (error) {
+                        //            console.log(`Failed to set remote session description: ${error.toString()}`);
+                        //        }
+
+                        //        // create answer
+                        //        console.log('createAnswer start');
+                        //        try {
+                        //            const answer = await videoPeer.peerConnection.createAnswer();
+                        //            console.log('answer created');
+
+                        //            videoPeer.peerConnection.setLocalDescription(answer);
+                        //            this.$videos.appendChild(videoPeer.$peer);
+
+                        //            let answerMessage = { type: 'answer', answer: answer };
+                        //            this.sendValue(answerMessage);
+
+                        //            let content = `<div>You have joined the chat.</div>`;
+                        //            let $joinMessage = this.showChatMessage(content);
+                        //            $joinMessage.classList.add('status');
+
+                        //        } catch (error) {
+                        //            console.error(error);
+                        //        }
+                        //    }
+                        //    else if (data.type == 'answer') {
+                        //        try {
+                        //            let videoPeer = this.getPeer(message.SenderId);
+                        //            if (videoPeer != null) {
+                        //                console.log('setRemoteDescription start');
+                        //                await videoPeer.peerConnection.setRemoteDescription(data.answer);
+                        //                console.log(`setRemoteDescription complete`);
+
+                        //                this.$videos.appendChild(videoPeer.$peer);
+
+                        //                let content = `<div>${this.chatSession.peerTokens[message.SenderId].DisplayName} has joined the chat.</div>`;
+                        //                let $joinMessage = this.showChatMessage(content);
+                        //                $joinMessage.classList.add('status');
+                        //            }
+                        //        } catch (error) {
+                        //            console.log(`Failed to set remote session description: ${error.toString()}`);
+                        //        }
+                        //    }
+                        //}
+                        //chatSession_OnStatusUpdates(event) {
+                        //    if (localPeerDescriptionSet == true && event.detail.Status == 'introduction') {
+                        //        console.log("Sending to server");
+                        //        // send offer through signaling channel
+                        //        //chatSession.send(JSON.stringify({ Message: localPeerOffer }));
+                        //    }
+                        //}
+                        //chatSession_OnClose(event) {
+                        //    if (this.chatSession.ending == true) {
+                        //        let action = (this.chatSession.token.SocketId == this.chatSession.hostToken.SocketId) ? 'ended' : 'left';
+                        //        this.showChatMessage(`[You have ${action} the chat session.]`);
+                        //    }
+                        //    else {
+                        //        this.showChatMessage('[The chat session has been ended.]')
+                        //    }
+                        //    this.chatSession = null;
+                        //}
+
+                        //async getWebcam_onClick(event) {
+                        //    console.log('Requesting local stream');
+                        //    this.$getWebcamButton.disabled = true;
+                        //    try {
+                        //        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: 1280, height: 720 } });
+                        //        console.log('Received local stream');
+                        //        this.$clientWebcam.srcObject = stream;
+                        //        this.localStream = stream;
+                        //        this.$getWebcamButton.disabled = false;
+                        //    }
+                        //    catch (exception) {
+                        //        console.error(`getUserMedia() error: ${exception.name}`);
+                        //    }
+                        //}
+
+                        //async startVideoChat_onClick(event) {
+                        //    this.host();
+                        //}
+                        //async endVideoChat_onClick(event) {
+                        //    if (this.isHost == false) {
+                        //        return;
+                        //    }
+                        //}
+
+                        //async joinVideoChat_onClick(event) {
+                        //    this.join(this.$guestSessionKey.value);
+                        //    this.$leaveVideoChatButton.disabled = false;
+                        //}
+                        //async leaveVideoChat_onClick(event) {
+
+                        //    this.closeLocalStream();
+
+                        //    for (let property in this.videoPeers) {
+                        //        if (this.videoPeers.hasOwnProperty(property)) {
+                        //            this.videoPeers[property].closeConnection();
+                        //            this.videoPeers[property].$peer.remove();
+                        //        }
+                        //    }
+                        //    this.videoPeers = {};
+
+                        //    this.$leaveVideoChatButton.disabled = true;
+
+                        //    this.chatSession.close();
+                        //}
+
+                        // functionality
+
+                        createSignalingSession() {
+                            let session = new WebsocketSession();
+                            session.addEventListener('peers', this.signalingSession_OnPeers.bind(this));
+                            session.addEventListener('message', this.signalingSession_OnMessage.bind(this));
+                            session.addEventListener('statusupdates', this.signalingSession_OnStatusUpdates.bind(this));
+                            session.addEventListener('close', this.signalingSession_OnClose.bind(this));
+                            session.addEventListener('error', this.signalingSession_OnError.bind(this));
+                            return session;
+                        }
+
+                        async host(displayName) {
+                            await this.connect('host', displayName);
+                            this.isHost = true;
+                        }
+                        async join(sessionKey, displayName) {
+                            return this.connect('join', sessionKey, displayName);
+                        }
+                        async connect(method, ...args) {
+
+                            if (this.signalingSession == null) {
+                                this.signalingSession = this.createSignalingSession();
+                            }
+
+                            // get signaling session
+                            await this.signalingSession[method](...args);
+                            this.updateVideoPeers();
+                        }
+
+                        async endSession() {
+
+                            // end streams
+                            for (const [peerId, peer] of this.videoPeers.entries()) {
+                                peer.endStream();
+                            }
+
+                            // end the signaling session
+                            this.signalingSession.requestedEnd = true;
+                            await this.signalingSession.close();
+                            this.resetState();
+                        }
+                        endWebcamStream() {
+                            this.clientPeer.endWebcamStream();
+                            this.isStreamingWebcam = false;
+                        }
+                        endScreenStream() {
+                            this.clientPeer.endScreenStream();
+                            this.isStreamingScreen = false;
+                        }
+
+                        sendValue(value, type, recipients) {
+                            this.sendMessage(JSON.stringify(value), type, recipients);
+                        }
+                        sendMessage(message, type, recipients) {
+                            type = type || 8;
+                            if (recipients != null) {
+                                if (!Array.isArray(recipients)) {
+                                    recipients = [recipients];
+                                }
+                            }
+                            this.signalingSession.send(JSON.stringify({ Type: type, SenderId: this.token, Message: message, Recipients: recipients }))
+                        }
+
+
+                        getPeerElement(peerConnection) {
+                            //let $peer = null;
+                            //let $elements = this.$videos.querySelectorAll('.peer');
+                            //[].map.call($elements, ($element) => {
+                            //    if ($element.peerConnection == peerConnection) {
+                            //        $peer = $element;
+                            //    }
+                            //});
+                            //return $peer;
+                        }
+
+
+                        updateVideoPeers(dispatchEvent = true) {
+                            // add or update new peers
+                            const peersAdded = [];
+                            for (let property in this.signalingSession.peerTokens) {
+                                if (this.signalingSession.peerTokens.hasOwnProperty(property)) {
+                                    let peerToken = this.signalingSession.peerTokens[property];
+                                    let videoPeer = this.videoPeers.get(peerToken.PeerId);
+                                    if (videoPeer == null) {
+                                        videoPeer = this.addPeer(peerToken);
+                                        peersAdded.push(videoPeer);
+                                    }
+                                    this.updatePeer(videoPeer, peerToken, false);
+                                }
+                            }
+
+                            // remove the peers that are no longer in the session
+                            const peersRemoved = [];
+                            for (const [peerId, videoPeer] of this.videoPeers.entries()) {
+
+                                let peerToken = this.signalingSession.peerTokens[peerId];
+                                if (peerToken == null) {
+                                    peersRemoved.push(videoPeer);
+                                    this.removePeer(peerId, false);
+                                }
+                            }
+
+                            if (dispatchEvent == true) {
+                                let actionEvent = new CustomEvent('peers', { detail: { peers: this.videoPeers.entries(), added: peersAdded, removed: peersRemoved } });
+                                this.dispatchEvent(actionEvent);
+                            }
+
+                            return { peersAdded, peersRemoved };
+                        }
+
+                        updatePeer(videoPeer, dispatchEvent = true) {
+
+                            if (videoPeer.token.PeerId == this.signalingSession.token.PeerId) {
+                                this.clientPeer = videoPeer;
+                            }
+                            if (videoPeer.token.PeerId == this.signalingSession.hostToken.PeerId) {
+                                this.hostPeer = videoPeer;
+                            }
+
+                            this.videoPeers[videoPeer.token.PeerId] = videoPeer;
+
+                            if (dispatchEvent == true) {
+                                let actionEvent = new CustomEvent('peers', { detail: this.videoPeers });
+                                this.dispatchEvent(actionEvent);
+                            }
+                        }
+                        removePeer(peerId, dispatchEvent = true) {
+                            delete this.videoPeers[peerId];
+
+                            if (dispatchEvent == true) {
+                                let actionEvent = new CustomEvent('peers', { detail: this.videoPeers });
+                                this.dispatchEvent(actionEvent);
+                            }
+                        }
+
+                        async updatePeerStreams(connections, disconnections) {
+                            for (let i = 0; i < connections.length; i++) {
+                                const videoPeer = connections[i];
+                                const offer = await videoPeer.createOffer();
+
+                                // send offer to peer
+                                let offerMessage = { type: 'offer', offer: offer };
+                                this.sendValue(offerMessage, null, videoPeer.token.PeerId);
+                            }
+                            for (let i = 0; i < disconnections.length; i++) {
+                                const videoPeer = disconnections[i];
+                                console.log(videoPeer);
+                                //let videoPeer = this.videoPeers[peer.SocketId];
+                                //videoPeer.closeConnection();
+                                //videoPeer.$peer.remove();
+
+
+
+                                videoPeer.$video.srcObject = null;
+
+                                videoPeer.$video.removeAttribute("src");
+                                videoPeer.$video.removeAttribute("srcObject");
+
+                                //delete this.videoPeers[peer.SocketId];
+                                //let action = (peerIsHost == true) ? 'ended' : 'left';
+                                //let content = `<div>${displayName} has ${action} the chat.</div>`;
+                                //let $leaveMessage = this.showChatMessage(content);
+                                //$leaveMessage.classList.add('status');
+                            }
+                        }
+
+                        handle_ice_onCandidate(peerId, event) {
+                            console.log('ICE Candidate event: ', event);
+                            this.sendValue({ type: 'candidate', candidate: event.candidate }, null, peerId);
+                        }
+                        handle_ice_onConnected() {
+                            let action = new CustomEvent('connected');
+                            this.dispatchEvent(action);
+                        }
+                    }
+
+                    // a helper class for organizing peer data in video chats
+                    class VideoPeer {
+                        constructor(peerToken) {
+                            this.peerConnection = null;
+                            this.token = peerToken;
+                            this.stream = null;
+
+                            this.$element = document.createElement('li');
+                            this.$element.classList.add('video-stream');
+                            this.$element.innerHTML = `<video></video><button class="set-priority" type="button" title="Expand" data-peer-name="${peerToken.DisplayName}"></button>`
+                            this.$video = this.$element.querySelector('video');
+                            this.$setPriority = this.$element.querySelector('button');
+                            this.$video.autoplay = true;
+
+                        }
+
+                        addConnection(configuration, iceConnectedCallback, iceCandidateCallback) {
+
+                            console.log('RTCPeerConnection configuration:', configuration);
+                            this.peerConnection = new RTCPeerConnection(configuration);
+                            this.peerConnection.addEventListener('track', (event) => {
+                                console.log('ICE track event: ', event);
+                                const stream = event.streams[0];
+                                this.setVideoSource(stream);
+                            });
+                            this.peerConnection.addEventListener('icecandidate', (event) => {
+                                if (event.candidate != null && iceCandidateCallback != null) {
+                                    iceCandidateCallback(this.token.PeerId, event);
+                                }
+                            });
+                            this.peerConnection.addEventListener('iceconnectionstatechange', (event) => {
+                                console.log('ICE state change event: ', event);
+                                if (this.peerConnection.iceConnectionState == 'connected') {
+                                    if (iceConnectedCallback != null) {
+                                        iceConnectedCallback();
+                                    }
+                                }
+                            });
+
+                            this.$element.peerConnection = this.peerConnection;
+                        }
+                        closeConnection() {
+
+                            if (this.peerConnection) {
+                                this.peerConnection.ontrack = null;
+                                this.peerConnection.onremovetrack = null;
+                                this.peerConnection.onremovestream = null;
+                                this.peerConnection.onicecandidate = null;
+                                this.peerConnection.oniceconnectionstatechange = null;
+                                this.peerConnection.onsignalingstatechange = null;
+                                this.peerConnection.onicegatheringstatechange = null;
+                                this.peerConnection.onnegotiationneeded = null;
+
+                                this.peerConnection.close();
+                                this.peerConnection = null;
+                            }
+
+                            this.endStream();
+                        }
+
+                        async createOffer() {
+
+                            try {
+                                // create offer
+                                const offerOptions = {
+                                    offerToReceiveAudio: 1,
+                                    offerToReceiveVideo: 1
+                                };
+
+                                console.log('localPeerConnection createOffer start');
+                                let offer = await this.peerConnection.createOffer(offerOptions);
+                                //console.log(`Offer from peerConnection\n${this.peerOffer.sdp}`);
+
+                                // set description
+                                console.log('peerConnection setLocalDescription start', this.token.PeerId);
+                                try {
+                                    await this.peerConnection.setLocalDescription(offer);
+                                    console.log(`setLocalDescription complete`, this.token.PeerId);
+                                } catch (error) {
+                                    console.log(`Failed to set session description: ${error.toString()}`);
+                                }
+
+                                return offer;
+                            } catch (error) {
+                                console.log(`Failed to create offer: ${error.toString()}`);
+                            }
+                        }
+
+                        // adds a stream to a peer connection that will be shown to all other peers
+                        // use this to give a remote peer connection a reference to your local stream
+                        setOutboundStream(stream) {
+                            stream.getTracks().forEach(track => this.peerConnection.addTrack(track, stream));
+                        }
+
+                        // adds a stream to a peer connection that will be shown to all other peers and will be displayed to you
+                        // use this to set a local stream for your local peer
+                        setVideoSource(stream) {
+                            if (stream == this.stream && stream != null) {
+                                return;
+                            }
+
+                            this.stream = stream;
+                            this.$video.srcObject = this.stream;
+                            //this.$video.play();
+
+                            //this.stream.getTracks().forEach(track => this.peerConnection.addTrack(track));
+                        }
+                        pauseWebcam() {
+                            this.$video.pause();
+                        }
+                        playWebcam() {
+                            this.$video.play();
+                        }
+                        pauseScreenshare() {
+                            this.$screenshare.pause();
+                        }
+                        playScreenshare() {
+                            this.$screenshare.pause();
+                        }
+                        endStream() {
+                            this.endWebcamStream();
+                            this.endScreenStream();
+                        }
+                        endWebcamStream() {
+                            try {
+                                if (this.stream != null) {
+                                    let tracks = this.stream.getTracks();
+                                    for (const track of tracks) {
+                                        track.stop();
+                                    }
+                                }
+                            }
+                            catch (error) {
+                                console.error(new Error("Unable to stop stream track for peer:"));
+                                console.error(error);
+                            }
+                        }
+                        endScreenStream() {
+                            try {
+                                //if (this.stream != null) {
+                                //    let tracks = this.stream.getTracks();
+                                //    for (const track of tracks) {
+                                //        track.stop();
+                                //    }
+                                //}
+                            }
+                            catch (error) {
+                                console.error(new Error("Unable to stop stream track for peer:"));
+                                console.error(error);
+                            }
+                        }
+                    }
+                </script>
             </div>
 
         </div>
