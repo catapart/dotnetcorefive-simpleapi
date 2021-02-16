@@ -1340,10 +1340,10 @@
                         // handlers
                         function videoSession_onConnected(event) {
                             // wait until after connected to add a stream
-                            // if you are joining a session. 
-                            if (videoChat.isHost == false) {
-                                requestWebcam();
-                            }
+                            // if you are joining a session.
+                            //if (videoChat.isHost == false) {
+                            //    requestWebcam();
+                            //}
                         }
                         function videoSession_onPeers(event) {
                             updateVideoChatPeers();
@@ -1500,9 +1500,9 @@
                             addVideoChatStatus(introMessage);
                             displayVideoSessionKey(videoChat.signalingSession.sessionKey);
 
-                            if (videoChat.isStreamingWebcam != true && videoChat.isHost == true) {
-                                requestWebcam();
-                            }
+                            //if (videoChat.isStreamingWebcam != true && videoChat.isHost == true) {
+                            requestWebcam();
+                            //}
                         }
 
                         function setVideoSessionState(inSession) {
@@ -1531,7 +1531,7 @@
                             try {
                                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: 1280, height: 720 } });
                                 console.log('Received local webcam stream');
-                                videoChat.setLocalStream(stream);
+                                videoChat.setLocalWebcamStream(stream);
                             }
                             catch (exception) {
                                 console.error(`getUserMedia() error: ${exception.name}`);
@@ -1559,7 +1559,7 @@
                             try {
                                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: 1280, height: 720 } });
                                 console.log('Received local screen stream');
-                                videoChat.clientPeer.setVideoSource(stream);
+                                videoChat.clientPeer.setVideoSource(stream, 'screen');
                                 videoChat.isStreamingWebcam = true;
                             }
                             catch (exception) {
@@ -1579,9 +1579,9 @@
                         function updateVideoChatStreams() {
                             clearVideoChatStreams();
 
-                            for (let property in videoChat.videoPeers) {
+                            for (let property in videoChat.signalingPeers) {
 
-                                let peer = videoChat.videoPeers[property];
+                                let peer = videoChat.signalingPeers[property];
                                 if (peer.token.PeerId == videoChat.hostPeer.token.PeerId) {
                                     peer.$element.classList.add('host');
                                 }
@@ -1599,9 +1599,9 @@
                         function updateVideoChatPeers() {
                             clearVideoChatPeers();
 
-                            for (let property in videoChat.videoPeers) {
+                            for (let property in videoChat.signalingPeers) {
 
-                                let peer = videoChat.videoPeers[property];
+                                let peer = videoChat.signalingPeers[property];
                                 let displayName = (peer.token.DisplayName == '') ? `[${peer.token.PeerId}]` : peer.token.DisplayName;
                                 let $peer = document.createElement('li');
                                 $peer.classList.add('peer');
@@ -1615,7 +1615,7 @@
                                 $videoPeers.appendChild($peer);
                             }
 
-                            let peerTokenCount = Object.keys(videoChat.videoPeers)?.length
+                            let peerTokenCount = Object.keys(videoChat.signalingPeers)?.length
                             $sessionStatusPill.$count.textContent = peerTokenCount;
                         }
                         function clearVideoChatPeers() {
@@ -1656,9 +1656,9 @@
                                 }
 
                                 content = `<header><span class="name">${peer.DisplayName}</span></header>
-                                                                                                                                                                                                                                                                                                            <div class="content">
-                                                                                                                                                                                                                                                                                                                ${messageData.Message}
-                                                                                                                                                                                                                                                                                                            </div>`;
+                                                                                                                                                                                                                                                                                                                                                                                                                            <div class="content">
+                                                                                                                                                                                                                                                                                                                                                                                                                                ${messageData.Message}
+                                                                                                                                                                                                                                                                                                                                                                                                                            </div>`;
                             }
 
                             $message.innerHTML = content;
@@ -1710,7 +1710,7 @@
                             this.configuration = {
                                 iceServers: [
                                     {
-                                        urls: "stun:stun.stunprotocol.org" // this is an example server, but you should set up your own STUN/TURN servers
+                                        urls: "stun:stun.l.google.com:19302" // this is an example server, but you should set up your own STUN/TURN servers
                                     }
                                 ]
                             };
@@ -1729,7 +1729,8 @@
                             //this._peerDescriptionIsSet = false;
                         }
                         resetState() {
-                            this.videoPeers = new Map();
+                            this.signalingPeers = new Map();
+                            this.streamingPeers = new Map();
                             this.clientPeer = null;
                             this.hostPeer = null;
 
@@ -1772,6 +1773,23 @@
 
                             const { peersAdded, peersRemoved } = this.updateVideoPeers(false);
 
+                            //if (this.isHost) {
+                            //    // to keep things simple, we're only allowing offers to come
+                            //    // from the host, rather than letting any client send offers
+                            //    if (this.clientPeer.webcamStream != null) {
+                            //        for (let i = 0; i < peersAdded.length; i++) {
+                            //            const videoPeer = peersAdded[i];
+                            //            this.sendOffer(videoPeer.token.PeerId, 'webcam');
+                            //        }
+                            //    }
+                            //    if (this.clientPeer.screenStream != null) {
+                            //        for (let i = 0; i < peersAdded.length; i++) {
+                            //            const videoPeer = peersAdded[i];
+                            //            this.sendOffer(videoPeer.token.PeerId, 'screen');
+                            //        }
+                            //    }
+                            //}
+
                             const connections = [];
                             const disconnections = [];
                             const updates = event.detail;
@@ -1781,7 +1799,7 @@
 
                                 for (let j = 0; j < update.Peers.length; j++) {
                                     let peer = update.Peers[j];
-                                    let videoPeer = this.videoPeers.get(peer.PeerId);
+                                    let videoPeer = this.signalingPeers.get(peer.PeerId);
                                     if (videoPeer == null) {
                                         continue;
                                     }
@@ -1797,7 +1815,7 @@
 
                             this.updatePeerStreams(connections, disconnections);
 
-                            let actionEvent = new CustomEvent('peers', { detail: { peers: this.videoPeers.entries(), added: peersAdded, removed: peersRemoved } });
+                            let actionEvent = new CustomEvent('peers', { detail: { peers: this.signalingPeers.entries(), added: peersAdded, removed: peersRemoved } });
                             this.dispatchEvent(actionEvent);
 
                         }
@@ -1814,21 +1832,35 @@
 
                             if (data.type == 'candidate') {
                                 try {
-                                    let videoPeer = this.videoPeers.get(message.SenderId);
+                                    let videoPeer = this.signalingPeers.get(message.SenderId);
                                     if (videoPeer != null) {
-                                        videoPeer.peerConnection.addIceCandidate(data.candidate);
+                                        const peerConnection = videoPeer.getPeerConnection(data.signalingType, data.connectionType).peerConnection;
+                                        if (peerConnection != null && peerConnection.remoteDescription != null) {
+                                            await peerConnection.addIceCandidate(data.candidate);
+                                        }
                                     }
                                 } catch (error) {
                                     console.log(`Failed to add ice candidate: ${error.toString()}`);
                                 }
                             }
                             else if (data.type == 'offer') {
-                                await this.setPeerRemoteDescription(message.SenderId, data.offer);
-                                this.sendAnswer(message.SenderId);
+                                await this.handleOffer(message.SenderId, data.offer, data.connectionType);
                             }
                             else if (data.type == 'answer') {
-                                this.setPeerRemoteDescription(message.SenderId, data.answer);
-                                this.setPeerStream(message.SenderId);
+                                const answeredPeer = this.signalingPeers.get(message.SenderId);
+                                const answeredPeerConnectionManager = answeredPeer.getPeerConnection('sent', data.connectionType);
+                                if (answeredPeerConnectionManager.peerConnection.getLocalStreams().length == 0) {
+                                    let streamToAdd = this.clientPeer.webcamStream;
+                                    if (data.connectionType == 'screen') {
+                                        streamToAdd = this.clientPeer.screenStream;
+                                    }
+                                    if (streamToAdd != null) {
+                                        answeredPeer.addStream('sent', data.connectionType, streamToAdd);
+                                    }
+                                }
+
+                                await this.setPeerRemoteDescription(message.SenderId, answeredPeerConnectionManager.peerConnection, data.answer, data.connectionType);
+                                
                             }
                         }
                         signalingSession_OnStatusUpdates(event) {
@@ -1855,45 +1887,168 @@
                             //console.log(event);
                         }
 
+                        // functionality
                         addPeer(peerToken) {
-                            const videoPeer = new VideoPeer(peerToken);
-                            videoPeer.addConnection(this.configuration, this.handle_ice_onConnected.bind(this), this.handle_ice_onCandidate.bind(this));
-                            this.videoPeers.set(peerToken.PeerId, videoPeer);
+                            const videoPeer = new VideoPeer(peerToken, this.configuration, this.handle_ice_onConnected.bind(this), this.handle_ice_onCandidate.bind(this));
+                            //videoPeer.addConnection(this.configuration, this.handle_ice_onConnected.bind(this), this.handle_ice_onCandidate.bind(this));
+                            this.signalingPeers.set(peerToken.PeerId, videoPeer);
 
-                            if (this.clientPeer != null && this.clientPeer.stream != null) {
-                                videoPeer.setOutboundStream(this.clientPeer.stream);
-                            }
+                            //if (this.clientPeer != null && this.clientPeer.stream != null) {
+                            //    videoPeer.setOutboundStream(this.clientPeer.stream);
+                            //}
                             return videoPeer;
                         }
 
-                        async sendAnswer(peerId) {
-                            let videoPeer = this.videoPeers.get(peerId);
+                        async handleOffer(peerId, offer, connectionType) {
+                            if (offer == null) {
+                                throw new Error('Cannot handle null offer');
+                            }
+
+                            const videoPeer = this.signalingPeers.get(peerId);
+                            if (videoPeer == null) {
+                                throw new Error('Unknown video peer cannot create offer');
+                            }
+
+                            // connect the recieved peer connection and send an answer if an offer has been sent;
+                            const receivedPeerConnectionManager = videoPeer.getPeerConnection('received', connectionType);
+                            receivedPeerConnectionManager.offerReceived = true;
+                            await this.setPeerRemoteDescription(videoPeer.token.PeerId, receivedPeerConnectionManager.peerConnection, offer);
+                            await this.sendAnswer(videoPeer, receivedPeerConnectionManager.peerConnection, connectionType);
+                            receivedPeerConnectionManager.offerAnswered = true;
+
+
+
+                            // if no offer has been sent, send an offer for this peer
+                            if (this.clientPeer.webcamStream != null) {
+                                const sentWebcamPeerConnectionManager = videoPeer.getPeerConnection('sent', 'webcam');
+                                if (sentWebcamPeerConnectionManager.offerSent == false && sentWebcamPeerConnectionManager.offerInProgress == false) {
+                                    await this.sendOffer(peerId, 'sent', 'webcam')
+                                }
+                            }
+                            if (this.clientPeer.screenStream != null) {
+                                const sentScreenPeerConnectionManager = videoPeer.getPeerConnection('sent', 'screen');
+                                if (sentScreenPeerConnectionManager.offerSent == false && sentScreenPeerConnectionManager.offerInProgress == false) {
+                                    await this.sendOffer(peerId, 'sent', 'screen')
+                                }
+                            }
+
+                            //const sentPeerConnectionManager = videoPeer.getPeerConnection('sent', connectionType);
+
+                            //// send answer if you've already got a local description
+                            //const currentPeerConnection = videoPeer.remotePeerConnections.get(connectionType)
+                            //if (currentPeerConnection != null) {
+
+
+                            //    // set the remote description to establish the p2p connection
+                            //    try {
+                            //        const peerConnection = videoPeer.localPeerConnections.get(connectionType);
+                            //        if (peerConnection.localDescription != null) {
+                            //            console.log('setRemoteDescription start', videoPeer.token.PeerId);
+                            //            await peerConnection.setRemoteDescription(offer);
+                            //            console.log(`setRemoteDescription complete`, videoPeer.token.PeerId);
+                            //        }
+
+                            //    } catch (error) {
+                            //        console.log(`Failed to set remote session description: ${error.toString()}`);
+                            //    }
+
+                            //    // if you've already sent an offer, you can now set it's answer
+                            //    if (videoPeer.offersSent.get(connectionType) == true) {
+                            //        this.sendAnswer(videoPeer, videoPeer.localPeerConnections.get(connectionType), connectionType);
+                            //    }
+                            //    // otherwise, if you have a stream, add it to this peer's local
+                            //    // connection to send your outgoing stream to this peer.
+                            //    else if (this.clientPeer.webcamStream != null) {
+                            //        await this.sendOffer(videoPeer.token.PeerId, 'webcam');
+                            //    }
+                            //    else if (this.clientPeer.screenStream != null) {
+                            //        await this.sendOffer(videoPeer.token.PeerId, 'screen');
+                            //    }
+                            //}
+                        }
+
+                        async sendOffer(peerId, signalingType, connectionType) {
+
+                            let videoPeer = this.signalingPeers.get(peerId);
+                            if (videoPeer == null) {
+                                throw new Error('Unknown video peer cannot create offer');
+                            }
+                            try {
+
+                                // create offer
+                                const offerOptions = {
+                                    offerToReceiveAudio: 1,
+                                    offerToReceiveVideo: 1
+                                };
+
+                                const peerConnectionManager = videoPeer.getPeerConnection(signalingType, connectionType);
+                                if (peerConnectionManager == null) {
+                                    throw new Error('No peer connection found');
+                                }
+
+                                if (peerConnectionManager.offerInProgress == true || peerConnectionManager.offerReceived == true) {
+                                    return;
+                                }
+
+                                peerConnectionManager.offerInProgress = true;
+
+                                // add any local streams before the offer is sent
+                                // otherwise track events won't fire correctly on 
+                                // the other side of the connection
+                                let streamToAdd = this.clientPeer.webcamStream;
+                                if (connectionType == 'screen') {
+                                    streamToAdd = this.clientPeer.screenStream;
+                                }
+
+                                if (streamToAdd != null && peerConnectionManager.peerConnection.getLocalStreams().length == 0) {
+                                    videoPeer.addStream(signalingType, connectionType, streamToAdd);
+                                }
+
+                                console.log('localPeerConnection createOffer start');
+                                let offer = await peerConnectionManager.peerConnection.createOffer(offerOptions);
+                                //console.log(`Offer from peerConnection\n${this.peerOffer.sdp}`);
+
+                                // set description
+                                console.log('peerConnection setLocalDescription start', videoPeer.token.PeerId);
+                                try {
+                                    await peerConnectionManager.peerConnection.setLocalDescription(offer);
+                                    console.log(`setLocalDescription complete`, videoPeer.token.PeerId);
+                                } catch (error) {
+                                    console.log(`Failed to set session description: ${error.toString()}`);
+                                }
+
+                                // send offer to peer
+                                let offerMessage = { type: 'offer', offer: offer, connectionType: connectionType };
+                                this.sendValue(offerMessage, null, videoPeer.token.PeerId);
+                                peerConnectionManager.offerSent = true;
+                            } catch (error) {
+                                console.log(`Failed to send offer: ${error.toString()}`);
+                            }
+                        }
+                        async sendAnswer(videoPeer, peerConnection, connectionType) {
                             // create answer
                             console.log('createAnswer start');
                             try {
-                                const answer = await videoPeer.peerConnection.createAnswer();
+                                const answer = await peerConnection.createAnswer();
                                 console.log('answer created');
 
                                 console.log('set local peer description', videoPeer.token.PeerId);
-                                videoPeer.peerConnection.setLocalDescription(answer);
-                                let answerMessage = { type: 'answer', answer: answer };
+                                peerConnection.setLocalDescription(answer);
+                                let answerMessage = { type: 'answer', answer: answer, connectionType: connectionType };
                                 this.sendValue(answerMessage);
+
+                                console.log(this);
 
                             } catch (error) {
                                 console.error(error);
                             }
                         }
-                        async setPeerRemoteDescription(peerId, description) {
-
-                            let videoPeer = this.videoPeers.get(peerId);
-                            if (videoPeer == null) {
-                                throw new Error('Unknown video peer sent offer');
-                            }
+                        async setPeerRemoteDescription(peerId, peerConnection, description) {
 
                             try {
-                                console.log('setRemoteDescription start', videoPeer.token.PeerId);
-                                await videoPeer.peerConnection.setRemoteDescription(description);
-                                console.log(`setRemoteDescription complete`, videoPeer.token.PeerId);
+                                console.log('setRemoteDescription start', peerId);
+                                await peerConnection.setRemoteDescription(description);
+                                console.log(`setRemoteDescription complete`, peerId);
 
                             } catch (error) {
                                 console.log(`Failed to set remote session description: ${error.toString()}`);
@@ -1901,235 +2056,42 @@
                             //send event
                         }
 
-                        setPeerStream(peerId, stream) {
-                            let videoPeer = this.videoPeers.get(peerId);
+                        setPeerStream(peerId, stream, connectionType) {
+                            let videoPeer = this.signalingPeers.get(peerId);
                             if (videoPeer == null) {
-                                throw new Error('Unknown video peer sent offer');
+                                throw new Error('Unknown video peer');
                             }
 
-                            stream = stream || videoPeer.stream;
+                            if (connectionType == 'webcam') {
+                                stream = stream || videoPeer.webcamStream;
+                            }
+                            else if (connectionType == 'screen') {
+                                stream = stream || videoPeer.screenStream;
+                            }
 
-                            videoPeer.setVideoSource(stream);
+
+                            videoPeer.setVideoSource(stream, connectionType);
                         }
-                        setLocalStream(stream) {
-                            this.clientPeer.setVideoSource(stream);
+                        setLocalWebcamStream(stream) {
+
+                            this.clientPeer.setVideoSource('webcam', stream);
                             this.isStreamingWebcam = true;
 
-                            for (let [peerId, videoPeer] of this.videoPeers.entries()) {
+                            for (let [peerId, videoPeer] of this.signalingPeers.entries()) {
                                 if (videoPeer != this.clientPeer) {
-                                    videoPeer.setOutboundStream(stream);
+                                    videoPeer.addStream('sent', 'webcam', stream);
+
+                                    // if you have a stream, add it to this peer's local connections
+                                    // to send your outgoing stream to this peer.
+                                    if (this.clientPeer.webcamStream != null) {
+                                        this.sendOffer(videoPeer.token.PeerId, 'sent', 'webcam');
+                                    }
+                                    if (this.clientPeer.screenStream != null) {
+                                        this.sendOffer(videoPeer.token.PeerId, 'sent', 'screen');
+                                    }
                                 }
                             }
                         }
-
-
-                        //chatSession_OnGreeting(event) {
-                        //    this.updateChatPeers();
-                        //    if (this.isHost == true) {
-                        //        this.$hostSessionKey.value = event.detail.SessionKey;
-                        //    }
-                        //}
-                        //async chatSession_OnPeers(event) {
-
-                        //    let updates = event.detail;
-                        //    for (let i = 0; i < updates.length; i++) {
-                        //        let update = updates[i];
-
-                        //        for (let j = 0; j < update.Peers.length; j++) {
-                        //            let peer = update.Peers[j];
-                        //            let displayName = (peer.DisplayName == '') ? `[${peer.SocketId}]` : peer.DisplayName;
-                        //            let peerIsHost = peer.SocketId == this.chatSession.hostToken.SocketId;
-                        //            if (update.Status == 'connect') {
-
-                        //                // create peer connection
-                        //                let videoPeer = this.addPeer(peer.SocketId);
-                        //                videoPeer.addConnection(this, peer.SocketId, this.configuration);
-                        //                videoPeer.$peer.$title.textContent = peer.DisplayName || peer.SocketId;
-
-                        //                try {
-                        //                    // create offer
-                        //                    const offerOptions = {
-                        //                        offerToReceiveAudio: 1,
-                        //                        offerToReceiveVideo: 1
-                        //                    };
-
-                        //                    console.log('localPeerConnection createOffer start');
-                        //                    let offer = await videoPeer.peerConnection.createOffer(offerOptions);
-                        //                    //console.log(`Offer from peerConnection\n${this.peerOffer.sdp}`);
-
-                        //                    // set description
-                        //                    console.log('peerConnection setLocalDescription start');
-                        //                    try {
-                        //                        await videoPeer.peerConnection.setLocalDescription(offer);
-                        //                        console.log(`setLocalDescription complete`);
-                        //                    } catch (error) {
-                        //                        console.log(`Failed to set session description: ${error.toString()}`);
-                        //                    }
-
-                        //                    // send offer to peer
-                        //                    let offerMessage = { type: 'offer', offer: offer };
-                        //                    this.sendValue(offerMessage, null, message.SenderId);
-                        //                } catch (error) {
-                        //                    console.log(`Failed to create offer: ${error.toString()}`);
-                        //                }
-                        //            }
-                        //            else if (update.Status == 'disconnect') {
-                        //                let videoPeer = this.videoPeers[peer.SocketId];
-                        //                videoPeer.closeConnection();
-                        //                videoPeer.$peer.remove();
-
-                        //                delete this.videoPeers[peer.SocketId];
-                        //                let action = (peerIsHost == true) ? 'ended' : 'left';
-                        //                let content = `<div>${displayName} has ${action} the chat.</div>`;
-                        //                let $leaveMessage = this.showChatMessage(content);
-                        //                $leaveMessage.classList.add('status');
-                        //            }
-                        //        }
-                        //    }
-
-                        //    this.updateChatPeers();
-                        //}
-                        //async chatSession_OnMessage(event) {
-
-                        //    console.log(event);
-
-                        //    let message = event.detail;
-                        //    let data = JSON.parse(message.Message);
-                        //    if (message.SenderId == this.chatSession.token.SocketId) {
-                        //        return;
-                        //    }
-
-                        //    if (data.type == 'candidate') {
-                        //        try {
-                        //            let videoPeer = this.getPeer(message.SenderId);
-                        //            if (videoPeer != null) {
-                        //                videoPeer.peerConnection.addIceCandidate(data.candidate);
-                        //            }
-                        //        } catch (error) {
-                        //            console.log(`Failed to add ice candidate: ${error.toString()}`);
-                        //        }
-                        //    }
-                        //    else if (data.type == 'offer') {
-
-                        //        let videoPeer = this.getPeer(message.SenderId);
-                        //        if (videoPeer == null) {
-                        //            videoPeer = this.addPeer(message.SenderId);
-                        //            videoPeer.addConnection(this, message.SenderId, data.configuration);
-                        //            videoPeer.$peer.$title.textContent = this.chatSession.peerTokens[message.SenderId]?.DisplayName || message.SenderId;
-                        //        }
-
-                        //        try {
-                        //            console.log('setRemoteDescription start');
-                        //            await videoPeer.peerConnection.setRemoteDescription(data.offer);
-                        //            console.log(`setRemoteDescription complete`);
-
-                        //        } catch (error) {
-                        //            console.log(`Failed to set remote session description: ${error.toString()}`);
-                        //        }
-
-                        //        // create answer
-                        //        console.log('createAnswer start');
-                        //        try {
-                        //            const answer = await videoPeer.peerConnection.createAnswer();
-                        //            console.log('answer created');
-
-                        //            videoPeer.peerConnection.setLocalDescription(answer);
-                        //            this.$videos.appendChild(videoPeer.$peer);
-
-                        //            let answerMessage = { type: 'answer', answer: answer };
-                        //            this.sendValue(answerMessage);
-
-                        //            let content = `<div>You have joined the chat.</div>`;
-                        //            let $joinMessage = this.showChatMessage(content);
-                        //            $joinMessage.classList.add('status');
-
-                        //        } catch (error) {
-                        //            console.error(error);
-                        //        }
-                        //    }
-                        //    else if (data.type == 'answer') {
-                        //        try {
-                        //            let videoPeer = this.getPeer(message.SenderId);
-                        //            if (videoPeer != null) {
-                        //                console.log('setRemoteDescription start');
-                        //                await videoPeer.peerConnection.setRemoteDescription(data.answer);
-                        //                console.log(`setRemoteDescription complete`);
-
-                        //                this.$videos.appendChild(videoPeer.$peer);
-
-                        //                let content = `<div>${this.chatSession.peerTokens[message.SenderId].DisplayName} has joined the chat.</div>`;
-                        //                let $joinMessage = this.showChatMessage(content);
-                        //                $joinMessage.classList.add('status');
-                        //            }
-                        //        } catch (error) {
-                        //            console.log(`Failed to set remote session description: ${error.toString()}`);
-                        //        }
-                        //    }
-                        //}
-                        //chatSession_OnStatusUpdates(event) {
-                        //    if (localPeerDescriptionSet == true && event.detail.Status == 'introduction') {
-                        //        console.log("Sending to server");
-                        //        // send offer through signaling channel
-                        //        //chatSession.send(JSON.stringify({ Message: localPeerOffer }));
-                        //    }
-                        //}
-                        //chatSession_OnClose(event) {
-                        //    if (this.chatSession.ending == true) {
-                        //        let action = (this.chatSession.token.SocketId == this.chatSession.hostToken.SocketId) ? 'ended' : 'left';
-                        //        this.showChatMessage(`[You have ${action} the chat session.]`);
-                        //    }
-                        //    else {
-                        //        this.showChatMessage('[The chat session has been ended.]')
-                        //    }
-                        //    this.chatSession = null;
-                        //}
-
-                        //async getWebcam_onClick(event) {
-                        //    console.log('Requesting local stream');
-                        //    this.$getWebcamButton.disabled = true;
-                        //    try {
-                        //        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: 1280, height: 720 } });
-                        //        console.log('Received local stream');
-                        //        this.$clientWebcam.srcObject = stream;
-                        //        this.localStream = stream;
-                        //        this.$getWebcamButton.disabled = false;
-                        //    }
-                        //    catch (exception) {
-                        //        console.error(`getUserMedia() error: ${exception.name}`);
-                        //    }
-                        //}
-
-                        //async startVideoChat_onClick(event) {
-                        //    this.host();
-                        //}
-                        //async endVideoChat_onClick(event) {
-                        //    if (this.isHost == false) {
-                        //        return;
-                        //    }
-                        //}
-
-                        //async joinVideoChat_onClick(event) {
-                        //    this.join(this.$guestSessionKey.value);
-                        //    this.$leaveVideoChatButton.disabled = false;
-                        //}
-                        //async leaveVideoChat_onClick(event) {
-
-                        //    this.closeLocalStream();
-
-                        //    for (let property in this.videoPeers) {
-                        //        if (this.videoPeers.hasOwnProperty(property)) {
-                        //            this.videoPeers[property].closeConnection();
-                        //            this.videoPeers[property].$peer.remove();
-                        //        }
-                        //    }
-                        //    this.videoPeers = {};
-
-                        //    this.$leaveVideoChatButton.disabled = true;
-
-                        //    this.chatSession.close();
-                        //}
-
-                        // functionality
 
                         createSignalingSession() {
                             let session = new WebsocketSession();
@@ -2156,13 +2118,14 @@
 
                             // get signaling session
                             await this.signalingSession[method](...args);
+
                             this.updateVideoPeers();
                         }
 
                         async endSession() {
 
                             // end streams
-                            for (const [peerId, peer] of this.videoPeers.entries()) {
+                            for (const [peerId, peer] of this.signalingPeers.entries()) {
                                 peer.endStream();
                             }
 
@@ -2171,13 +2134,32 @@
                             await this.signalingSession.close();
                             this.resetState();
                         }
-                        endWebcamStream() {
-                            this.clientPeer.endWebcamStream();
-                            this.isStreamingWebcam = false;
+                        //endWebcamStream() {
+                        //    this.clientPeer.endWebcamStream();
+                        //    this.isStreamingWebcam = false;
+                        //}
+                        //endScreenStream() {
+                        //    this.clientPeer.endScreenStream();
+                        //    this.isStreamingScreen = false;
+                        //}
+
+
+
+                        beginWebcamStream(peerId, stream) {
+
                         }
-                        endScreenStream() {
-                            this.clientPeer.endScreenStream();
-                            this.isStreamingScreen = false;
+                        endWebcamStream(peerId) {
+
+                        }
+                        beginScreenStream(peerId, stream) {
+
+                        }
+                        endScreenStream(peerId) {
+
+                        }
+                        endStreaming(peerId) {
+                            this.endWebcamStream(peerId);
+                            this.endScreenStream(peerId);
                         }
 
                         sendValue(value, type, recipients) {
@@ -2212,7 +2194,7 @@
                             for (let property in this.signalingSession.peerTokens) {
                                 if (this.signalingSession.peerTokens.hasOwnProperty(property)) {
                                     let peerToken = this.signalingSession.peerTokens[property];
-                                    let videoPeer = this.videoPeers.get(peerToken.PeerId);
+                                    let videoPeer = this.signalingPeers.get(peerToken.PeerId);
                                     if (videoPeer == null) {
                                         videoPeer = this.addPeer(peerToken);
                                         peersAdded.push(videoPeer);
@@ -2223,7 +2205,7 @@
 
                             // remove the peers that are no longer in the session
                             const peersRemoved = [];
-                            for (const [peerId, videoPeer] of this.videoPeers.entries()) {
+                            for (const [peerId, videoPeer] of this.signalingPeers.entries()) {
 
                                 let peerToken = this.signalingSession.peerTokens[peerId];
                                 if (peerToken == null) {
@@ -2233,7 +2215,7 @@
                             }
 
                             if (dispatchEvent == true) {
-                                let actionEvent = new CustomEvent('peers', { detail: { peers: this.videoPeers.entries(), added: peersAdded, removed: peersRemoved } });
+                                let actionEvent = new CustomEvent('peers', { detail: { peers: this.signalingPeers.entries(), added: peersAdded, removed: peersRemoved } });
                                 this.dispatchEvent(actionEvent);
                             }
 
@@ -2249,18 +2231,18 @@
                                 this.hostPeer = videoPeer;
                             }
 
-                            this.videoPeers[videoPeer.token.PeerId] = videoPeer;
+                            this.signalingPeers[videoPeer.token.PeerId] = videoPeer;
 
                             if (dispatchEvent == true) {
-                                let actionEvent = new CustomEvent('peers', { detail: this.videoPeers });
+                                let actionEvent = new CustomEvent('peers', { detail: this.signalingPeers });
                                 this.dispatchEvent(actionEvent);
                             }
                         }
                         removePeer(peerId, dispatchEvent = true) {
-                            delete this.videoPeers[peerId];
+                            delete this.signalingPeers[peerId];
 
                             if (dispatchEvent == true) {
-                                let actionEvent = new CustomEvent('peers', { detail: this.videoPeers });
+                                let actionEvent = new CustomEvent('peers', { detail: this.signalingPeers });
                                 this.dispatchEvent(actionEvent);
                             }
                         }
@@ -2268,16 +2250,17 @@
                         async updatePeerStreams(connections, disconnections) {
                             for (let i = 0; i < connections.length; i++) {
                                 const videoPeer = connections[i];
-                                const offer = await videoPeer.createOffer();
-
-                                // send offer to peer
-                                let offerMessage = { type: 'offer', offer: offer };
-                                this.sendValue(offerMessage, null, videoPeer.token.PeerId);
+                                if (this.clientPeer.webcamStream != null) {
+                                    await this.sendOffer(videoPeer.token.PeerId, 'sent', 'webcam');
+                                }
+                                if (this.clientPeer.screenStream) {
+                                    await this.sendOffer(videoPeer.token.PeerId, 'sent', 'screen');
+                                }
                             }
                             for (let i = 0; i < disconnections.length; i++) {
                                 const videoPeer = disconnections[i];
                                 console.log(videoPeer);
-                                //let videoPeer = this.videoPeers[peer.SocketId];
+                                //let videoPeer = this.signalingPeers[peer.SocketId];
                                 //videoPeer.closeConnection();
                                 //videoPeer.$peer.remove();
 
@@ -2288,7 +2271,7 @@
                                 videoPeer.$video.removeAttribute("src");
                                 videoPeer.$video.removeAttribute("srcObject");
 
-                                //delete this.videoPeers[peer.SocketId];
+                                //delete this.signalingPeers[peer.SocketId];
                                 //let action = (peerIsHost == true) ? 'ended' : 'left';
                                 //let content = `<div>${displayName} has ${action} the chat.</div>`;
                                 //let $leaveMessage = this.showChatMessage(content);
@@ -2296,9 +2279,9 @@
                             }
                         }
 
-                        handle_ice_onCandidate(peerId, event) {
+                        handle_ice_onCandidate(peerId, event, signalingType, connectionType) {
                             console.log('ICE Candidate event: ', event);
-                            this.sendValue({ type: 'candidate', candidate: event.candidate }, null, peerId);
+                            this.sendValue({ type: 'candidate', candidate: event.candidate, signalingType: signalingType, connectionType: connectionType }, null, peerId);
                         }
                         handle_ice_onConnected() {
                             let action = new CustomEvent('connected');
@@ -2308,10 +2291,62 @@
 
                     // a helper class for organizing peer data in video chats
                     class VideoPeer {
-                        constructor(peerToken) {
-                            this.peerConnection = null;
+                        constructor(peerToken, configuration, iceConnectedCallback, iceCandidateCallback) {
+                            // due to how the event dispatching works, we can't create a
+                            // peer connection and have it just sit connected and then expect
+                            // a track even when the connected peer adds a stream.
+                            // we SHOULD be able to expect that, but we can't. So we have
+                            // to create peer connnections for streaming when those local streams
+                            // are collected.
+
+                            // because none of this has any bearing on data peer connections
+                            // we use entirely different peer connections for data connections
+                            // that are long lived. And then we have different streaming peer
+                            // connections for both webcams and screen shares.
+
+                            //this.webcamPeerConnection = null;
+                            //this.screenSharePeerConnection = null;
+                            //this.dataPeerConnection = null;
+
+                            //this.webcamDescription = null;
+                            //this.screenShareOffer = null;
+                            //this.dataOffer = null;
+
                             this.token = peerToken;
-                            this.stream = null;
+                            this.configuration = configuration;
+                            this.iceCandidateCallback = iceConnectedCallback;
+                            this.iceCandidateCallback = iceCandidateCallback;
+
+                            this.webcamStream = null;
+                            this.screenStream = null;
+
+                            this.sentPeerConnections = new Map();
+                            this.addPeerConnection('sent', 'webcam', configuration, iceConnectedCallback, iceCandidateCallback);
+                            this.addPeerConnection('sent', 'screen', configuration, iceConnectedCallback, iceCandidateCallback);
+                            this.addPeerConnection('sent', 'data', configuration, iceConnectedCallback, iceCandidateCallback);
+                            this.receivedPeerConnections = new Map();
+                            this.addPeerConnection('received', 'webcam', configuration, iceConnectedCallback, iceCandidateCallback);
+                            this.addPeerConnection('received', 'screen', configuration, iceConnectedCallback, iceCandidateCallback);
+                            this.addPeerConnection('received', 'data', configuration, iceConnectedCallback, iceCandidateCallback);
+
+                            //this.localPeerConnections = new Map();
+                            //this.localPeerConnections.set('webcam', this.createPeerConnection(configuration, iceConnectedCallback, iceCandidateCallback));
+                            //this.localPeerConnections.set('screen', this.createPeerConnection(configuration, iceConnectedCallback, iceCandidateCallback));
+                            //this.localPeerConnections.set('data', this.createPeerConnection(configuration, iceConnectedCallback, iceCandidateCallback));
+
+                            //this.remotePeerConnections = new Map();
+                            //this.remotePeerConnections.set('webcam', this.createPeerConnection(configuration, iceConnectedCallback, iceCandidateCallback));
+                            //this.remotePeerConnections.set('screen', this.createPeerConnection(configuration, iceConnectedCallback, iceCandidateCallback));
+                            //this.remotePeerConnections.set('data', this.createPeerConnection(configuration, iceConnectedCallback, iceCandidateCallback));
+
+                            //this.offersInProgress = new Map();
+                            //this.offersInProgress.set('webcam', false);
+                            //this.offersInProgress.set('screen', false);
+                            //this.offersInProgress.set('data', false);
+                            //this.offersSent = new Map();
+                            //this.offersSent.set('webcam', false);
+                            //this.offersSent.set('screen', false);
+                            //this.offersSent.set('data', false);
 
                             this.$element = document.createElement('li');
                             this.$element.classList.add('video-stream');
@@ -2320,6 +2355,143 @@
                             this.$setPriority = this.$element.querySelector('button');
                             this.$video.autoplay = true;
 
+                            this.$element.objectRef = this;
+
+                        }
+
+                        addPeerConnection(signalingType, connectionType, configuration, iceConnectedCallback, iceCandidateCallback) {
+
+                            const peerConnectionManager = new PeerConnectionManager();
+                            peerConnectionManager.signalingType = signalingType;
+                            peerConnectionManager.connectionType = connectionType;
+                            peerConnectionManager.peerConnection = new RTCPeerConnection(configuration);
+                            peerConnectionManager.peerConnection.addEventListener('track', (event) => {
+                                console.log('ICE track event: ', event);
+                                const stream = event.streams[0];
+                                this.setVideoSource(connectionType, stream);
+                            });
+                            peerConnectionManager.peerConnection.addEventListener('icecandidate', (event) => {
+                                if (event.candidate != null && iceCandidateCallback != null) {
+                                    iceCandidateCallback(this.token.PeerId, event, signalingType, connectionType);
+                                }
+                            });
+                            peerConnectionManager.peerConnection.addEventListener('iceconnectionstatechange', (event) => {
+                                console.log('ICE state change event: ', event);
+                                if (peerConnectionManager.peerConnection.iceConnectionState == 'connected') {
+                                    if (iceConnectedCallback != null) {
+                                        iceConnectedCallback();
+                                    }
+                                }
+                            });
+
+                            if (signalingType == 'sent') {
+                                this.sentPeerConnections.set(connectionType, peerConnectionManager);
+                            }
+                            else if (signalingType == 'received') {
+                                this.receivedPeerConnections.set(connectionType, peerConnectionManager);
+                            }
+
+                            return peerConnectionManager;
+                        }
+                        getPeerConnection(signalingType, connectionType) {
+                            if (signalingType == 'sent') {
+                                return this.sentPeerConnections.get(connectionType);
+                            }
+                            else if (signalingType == 'received') {
+                                return this.receivedPeerConnections.get(connectionType);
+                            }
+                            throw new Error('Unknown signaling type');
+                        }
+                        removePeerConnection(signalingType, connectionType) {
+                            if (signalingType == 'sent') {
+                                //return this.sentPeerConnections.get(connectionType);
+                            }
+                            else if (signalingType == 'received') {
+                                //return this.receivedPeerConnections.get(connectionType);
+                            }
+                            throw new Error('Unknown signaling type');
+                        }
+
+                        addStream(signalingType, connectionType, stream) {
+
+                            const peerConnection = this.getPeerConnection(signalingType, connectionType).peerConnection;
+                            stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+                        }
+                        setLocalStream(streamType, stream) {
+                            let streamPeer = this.localPeerConnections.get(streamType);
+                            if (streamPeer == null) {
+                                console.error('Unable to set remote stream of unknown peerConnection type "' + (type || "null") + '".');
+                                return;
+                            }
+
+                            if (streamType == 'webcam') {
+                                this.webcamStream = stream;
+                            }
+                            else if (streamType == 'screen') {
+                                this.screenStream = stream;
+                            }
+
+                            stream.getTracks().forEach(track => streamPeer.addTrack(track, stream));
+
+                        }
+                        setRemoteStream(streamType, stream) {
+                            let streamPeer = this.remotePeerConnections.get(streamType);
+                            if (streamPeer == null) {
+                                console.error('Unable to set remote stream of unknown peerConnection type "' + (type || "null") + '".');
+                                return;
+                            }
+
+                            stream.getTracks().forEach(track => streamPeer.addTrack(track, stream));
+                        }
+
+                        sendStreamToActiveConnection(connectionType, stream) {
+                            let sentPeerConnectionManger = this.getPeerConnection('sent', connectionType);
+                            let receivedPeerConnectionManger = this.getPeerConnection('received', connectionType);
+                            if (sentPeerConnectionManger.peerConnection.localDescription != null && sentPeerConnectionManger.peerConnection.remoteDescription != null) {
+                                this.addStream('sent', connectionType, stream);
+                            }
+                            else if (receivedPeerConnectionManger.peerConnection.localDescription != null && receivedPeerConnectionManger.peerConnection.remoteDescription != null) {
+
+                                this.addStream('received', connectionType, stream);
+                            }
+                        }
+
+                        //getPeerConnection(connectionType) {
+                        //    if (connectionType == 'data') {
+                        //    }
+                        //    else if (connectionType == 'webcam') {
+                        //        return this.webcamPeerConnection;
+                        //    }
+                        //    else if (connectionType == 'screen') {
+                        //        return this.screenSharePeerConnection;
+                        //    }
+                        //    throw new Error('Unimplemented');
+                        //}
+                        async refreshConnection(connectionType) {
+                            const peerConnectionProperty = (connectionType == 'webcam') ? 'webcamPeerConnection' : 'screenSharePeerConnection';
+                            if (this[peerConnectionProperty] != null) {
+                                await this.closeConnection(this[peerConnectionProperty]);
+                            }
+
+                            this[peerConnectionProperty] = new RTCPeerConnection(this.configuration);
+                            this[peerConnectionProperty].addEventListener('track', (event) => {
+                                console.log('ICE track event: ', event);
+                                const stream = event.streams[0];
+                                this.setVideoSource(connectionType, stream);
+                            });
+                            this[peerConnectionProperty].addEventListener('icecandidate', (event) => {
+                                if (event.candidate != null && this.iceCandidateCallback != null) {
+                                    this.iceCandidateCallback(this.token.PeerId, event, connectionType);
+                                }
+                            });
+                            this[peerConnectionProperty].addEventListener('iceconnectionstatechange', (event) => {
+                                console.log('ICE state change event: ', event);
+                                if (this[peerConnectionProperty].iceConnectionState == 'connected') {
+                                    if (this.iceConnectedCallback != null) {
+                                        this.iceConnectedCallback();
+                                    }
+                                }
+                            });
                         }
 
                         addConnection(configuration, iceConnectedCallback, iceCandidateCallback) {
@@ -2329,7 +2501,7 @@
                             this.peerConnection.addEventListener('track', (event) => {
                                 console.log('ICE track event: ', event);
                                 const stream = event.streams[0];
-                                this.setVideoSource(stream);
+                                this.setVideoSource('webcam', stream);
                             });
                             this.peerConnection.addEventListener('icecandidate', (event) => {
                                 if (event.candidate != null && iceCandidateCallback != null) {
@@ -2344,26 +2516,22 @@
                                     }
                                 }
                             });
-
-                            this.$element.peerConnection = this.peerConnection;
                         }
-                        closeConnection() {
+                        async closeConnection(peerConnection) {
 
-                            if (this.peerConnection) {
-                                this.peerConnection.ontrack = null;
-                                this.peerConnection.onremovetrack = null;
-                                this.peerConnection.onremovestream = null;
-                                this.peerConnection.onicecandidate = null;
-                                this.peerConnection.oniceconnectionstatechange = null;
-                                this.peerConnection.onsignalingstatechange = null;
-                                this.peerConnection.onicegatheringstatechange = null;
-                                this.peerConnection.onnegotiationneeded = null;
+                            if (peerConnection) {
+                                peerConnection.ontrack = null;
+                                peerConnection.onremovetrack = null;
+                                peerConnection.onremovestream = null;
+                                peerConnection.onicecandidate = null;
+                                peerConnection.oniceconnectionstatechange = null;
+                                peerConnection.onsignalingstatechange = null;
+                                peerConnection.onicegatheringstatechange = null;
+                                peerConnection.onnegotiationneeded = null;
 
-                                this.peerConnection.close();
-                                this.peerConnection = null;
+                                await peerConnection.close();
+                                peerConnection = null;
                             }
-
-                            this.endStream();
                         }
 
                         async createOffer() {
@@ -2396,19 +2564,33 @@
 
                         // adds a stream to a peer connection that will be shown to all other peers
                         // use this to give a remote peer connection a reference to your local stream
-                        setOutboundStream(stream) {
+                        setOutboundStream(stream, peerConnection) {
+                            this.closeConnection(peerConnection)
                             stream.getTracks().forEach(track => this.peerConnection.addTrack(track, stream));
                         }
 
-                        // adds a stream to a peer connection that will be shown to all other peers and will be displayed to you
-                        // use this to set a local stream for your local peer
-                        setVideoSource(stream) {
-                            if (stream == this.stream && stream != null) {
-                                return;
-                            }
 
-                            this.stream = stream;
-                            this.$video.srcObject = this.stream;
+                        setVideoSource(connectionType, stream) {
+                            try {
+                                if (connectionType == 'webcam') {
+                                    this.webcamStream = stream;
+                                    this.$video.srcObject = this.webcamStream;
+                                }
+                                else if (connectionType == 'screen') {
+                                    this.screenStream = stream;
+                                    this.$video.srcObject = this.screenStream;
+                                }
+                                //this.$video.play();
+                            }
+                            catch (error) {
+                                console.error(error);
+                            }
+                            //if (stream == this.stream && stream != null) {
+                            //    return;
+                            //}
+
+                            //this.stream = stream;
+                            //this.$video.srcObject = this.stream;
                             //this.$video.play();
 
                             //this.stream.getTracks().forEach(track => this.peerConnection.addTrack(track));
@@ -2431,8 +2613,8 @@
                         }
                         endWebcamStream() {
                             try {
-                                if (this.stream != null) {
-                                    let tracks = this.stream.getTracks();
+                                if (this.webcamStream != null) {
+                                    let tracks = this.webcamStream.getTracks();
                                     for (const track of tracks) {
                                         track.stop();
                                     }
@@ -2456,6 +2638,17 @@
                                 console.error(new Error("Unable to stop stream track for peer:"));
                                 console.error(error);
                             }
+                        }
+                    }
+                    class PeerConnectionManager {
+                        constructor() {
+                            this.signalingType = null;
+                            this.connectionType = null;
+                            this.peerConnection = null;
+                            this.offerInProgress = false;
+                            this.offerSent = false;
+                            this.offerReceived = false;
+                            this.offerAnswered = false;
                         }
                     }
                 </script>
