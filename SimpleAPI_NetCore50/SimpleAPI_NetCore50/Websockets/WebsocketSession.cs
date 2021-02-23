@@ -48,16 +48,11 @@ namespace SimpleAPI_NetCore50.Websockets
 
         public WebsocketSessionPeer AddPeer(WebSocket socket)
         {
-            string id = CreatePeerId();
-            WebsocketSessionPeer peer = new WebsocketSessionPeer(id, socket);
-            Peers.TryAdd(id, peer);
+            WebsocketSessionPeer peer = new WebsocketSessionPeer(socket);
+            Peers.TryAdd(peer.Token.PeerId, peer);
             return peer;
         }
 
-        public void AddPeer(WebsocketSessionPeer peer)
-        {
-            Peers.TryAdd(CreatePeerId(), peer);
-        }
         public async Task RemovePeer(string socketId)
         {
             WebsocketSessionPeer socket;
@@ -113,10 +108,6 @@ namespace SimpleAPI_NetCore50.Websockets
             }
         }
 
-        private string CreatePeerId()
-        {
-            return Guid.NewGuid().ToString();
-        }
 
         private void AddOrUpdateAttribute(string name, object value)
         {
