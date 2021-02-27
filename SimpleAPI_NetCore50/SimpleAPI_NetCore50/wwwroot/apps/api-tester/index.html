@@ -1358,24 +1358,28 @@
 
                             // show messages
                             let peersAdded = event.detail.added;
-                            for (let i = 0; i < peersAdded.length; i++) {
-                                let videoPeer = peersAdded[i];
-                                let peerToken = videoPeer.token;
-                                if (videoChat.isHost == false) {
-                                    let displayName = (peerToken.DisplayName == '') ? `[${peerToken.PeerId}]` : peerToken.DisplayName;
-                                    let content = `<div>${displayName} has joined the chat.</div>`;
-                                    let $joinMessage = addVideoChatStatus(content);
+                            if (peersAdded != null) {
+                                for (let i = 0; i < peersAdded.length; i++) {
+                                    let videoPeer = peersAdded[i];
+                                    let peerToken = videoPeer.token;
+                                    if (videoChat.isHost == false) {
+                                        let displayName = (peerToken.DisplayName == '') ? `[${peerToken.PeerId}]` : peerToken.DisplayName;
+                                        let content = `<div>${displayName} has joined the chat.</div>`;
+                                        let $joinMessage = addVideoChatStatus(content);
+                                    }
                                 }
                             }
 
                             let peersRemoved = event.detail.removed;
-                            for (let i = 0; i < peersRemoved.length; i++) {
-                                let videoPeer = peersRemoved[i];
-                                let peerToken = videoPeer.token;
-                                let displayName = (peerToken.DisplayName == '') ? `[${peerToken.PeerId}]` : peerToken.DisplayName;
-                                let action = (videoChat.isHost == true) ? 'ended' : 'left';
-                                let content = `<div>${displayName} has ${action} the chat.</div>`;
-                                let $leaveMessage = addVideoChatStatus(content);
+                            if (peersRemoved != null) {
+                                for (let i = 0; i < peersRemoved.length; i++) {
+                                    let videoPeer = peersRemoved[i];
+                                    let peerToken = videoPeer.token;
+                                    let displayName = (peerToken.DisplayName == '') ? `[${peerToken.PeerId}]` : peerToken.DisplayName;
+                                    let action = (videoChat.isHost == true) ? 'ended' : 'left';
+                                    let content = `<div>${displayName} has ${action} the chat.</div>`;
+                                    let $leaveMessage = addVideoChatStatus(content);
+                                }
                             }
                         }
                         function videoSession_onChatMessage(event) {
@@ -1587,16 +1591,15 @@
                         function updateVideoChatStreams() {
                             clearVideoChatStreams();
 
-                            for (let property in videoChat.signalingPeers) {
+                            for (const [peerId, videoPeer] of videoChat.signalingPeers) {
 
-                                let peer = videoChat.signalingPeers[property];
-                                if (peer.token.PeerId == videoChat.hostPeer.token.PeerId) {
-                                    peer.$element.classList.add('host');
+                                if (peerId == videoChat.hostPeer.token.PeerId) {
+                                    videoPeer.$element.classList.add('host');
                                 }
-                                if (peer.token.PeerId == videoChat.clientPeer.token.PeerId) {
-                                    peer.$element.classList.add('self');
+                                if (peerId == videoChat.clientPeer.token.PeerId) {
+                                    videoPeer.$element.classList.add('self');
                                 }
-                                $videoStreams.appendChild(peer.$element);
+                                $videoStreams.appendChild(videoPeer.$element);
                             }
                         }
                         function clearVideoChatStreams() {
@@ -1664,9 +1667,9 @@
                                 }
 
                                 content = `<header><span class="name">${peer.DisplayName}</span></header>
-                                                                            <div class="content">
-                                                                                ${messageData.Message}
-                                                                            </div>`;
+                                                                                            <div class="content">
+                                                                                                ${messageData.Message}
+                                                                                            </div>`;
                             }
 
                             $message.innerHTML = content;
@@ -1781,7 +1784,7 @@
                                 try {
                                     let videoPeer = this.signalingPeers.get(message.SenderId);
                                     if (videoPeer != null) {
-                                        videoPeer.addIceCandidate(data.candidate);
+                                        videoPeer.addIceCandidate(data.streamType, data.candidate);
                                     }
                                 } catch (error) {
                                     console.log(`Failed to add ice candidate: ${error.toString()}`);
@@ -1790,7 +1793,7 @@
                             else if (data.type == 'description') {
                                 let videoPeer = this.signalingPeers.get(message.SenderId);
                                 if (videoPeer != null) {
-                                    videoPeer.setDescription(data.description, this.sendValue.bind(this));
+                                    videoPeer.setDescription(data.streamType, data.description, this.sendValue.bind(this));
                                 }
                             }
                         }
@@ -1818,16 +1821,16 @@
                         }
 
 
-                        handle_ice_onCandidate(peerId, event, signalingType, connectionType) {
+                        handle_ice_onCandidate(peerId, event, streamType) {
                             console.log('ICE Candidate event: ', event);
-                            this.sendValue({ type: 'candidate', candidate: event.candidate, signalingType: signalingType, connectionType: connectionType }, null, peerId);
+                            this.sendValue({ type: 'candidate', candidate: event.candidate, streamType: streamType }, null, peerId);
                         }
-                        handle_ice_onConnected() {
+                        handle_ice_onConnected(peerId, event, streamType) {
                             let action = new CustomEvent('connected');
                             this.dispatchEvent(action);
                         }
-                        handle_ice_onNegotiationNeeded(peerId, event, description, connectionType) {
-                            this.sendValue({ type: 'description', description: description, connectionType: connectionType }, null, peerId);
+                        handle_ice_onNegotiationNeeded(peerId, event, description, streamType) {
+                            this.sendValue({ type: 'description', description: description, streamType: streamType }, null, peerId);
                         }
 
                         // functionality
@@ -1864,10 +1867,12 @@
 
                         async endSession() {
 
-                            // end streams
+                            // remove clients / end remote streams
                             for (const [peerId, videoPeer] of this.signalingPeers.entries()) {
                                 this.removePeer(peerId);
                             }
+
+                            await this.clientPeer.endLocalStreams();
 
                             // end the signaling session
                             this.signalingSession.requestedEnd = true;
@@ -1879,12 +1884,12 @@
                         setLocalWebcamStream(stream) {
 
                             this.clientPeer.$video.srcObject = stream;
-                            this.clientPeer.localWebcamStream = stream;
+                            this.clientPeer.localWebcamStream.stream = stream;
                             this.isStreamingWebcam = true;
 
                             for (let [peerId, videoPeer] of this.signalingPeers.entries()) {
                                 if (videoPeer != this.clientPeer) {
-                                    videoPeer.addStream(stream);
+                                    videoPeer.addStream(stream, 'webcam');
                                 }
                             }
                         }
@@ -1899,13 +1904,13 @@
                             }
 
                             this.clientPeer.removeStream('webcam');
-                            this.clientPeer.localWebcamStream = null;
+                            this.clientPeer.localWebcamStream.stream = null;
                             this.isStreamingWebcam = false;
                         }
                         beginLocalScreenStream(stream) {
                             this.clientPeer.$screenshare.style.display = 'initial';
                             this.clientPeer.$screenshare.srcObject = stream;
-                            this.clientPeer.localScreenStream = stream;
+                            this.clientPeer.localScreenStream.stream = stream;
                             this.isStreamingScreen = true;
 
                             // handle the case that the user clicked
@@ -1924,7 +1929,7 @@
                             this.clientPeer.$screenshare.srcObject = null;
                             this.clientPeer.$screenshare.style.display = 'none';
                             this.clientPeer.removeStream('screen');
-                            this.clientPeer.localScreenStream = null;
+                            this.clientPeer.localScreenStream.stream = null;
 
                             for (let [peerId, videoPeer] of this.signalingPeers.entries()) {
                                 if (videoPeer != this.clientPeer) {
@@ -1994,7 +1999,7 @@
                             return { peersAdded, peersRemoved };
                         }
                         addPeer(peerToken) {
-                            const videoPeer = new VideoPeer(peerToken, this.configuration, this.handle_ice_onConnected.bind(this), this.handle_ice_onCandidate.bind(this), this.handle_ice_onNegotiationNeeded.bind(this));
+                            const videoPeer = new VideoPeer(peerToken, { configuration: this.configuration, iceConnectedCallback: this.handle_ice_onConnected.bind(this), iceCandidateCallback: this.handle_ice_onCandidate.bind(this), onNegotiationNeededCallback: this.handle_ice_onNegotiationNeeded.bind(this) });
                             this.signalingPeers.set(peerToken.PeerId, videoPeer);
                             return videoPeer;
                         }
@@ -2017,7 +2022,7 @@
                         removePeer(peerId, dispatchEvent = true) {
                             const videoPeer = this.signalingPeers.get(peerId);
                             if (videoPeer != null) {
-                                videoPeer.endStreams();
+                                videoPeer.endRemoteStreams(); // we don't end the local streams on that client because they're shared with all peers
                                 this.signalingPeers.delete(peerId);
                             }
 
@@ -2030,11 +2035,11 @@
                         async updatePeerStreams(connections) {
                             for (let i = 0; i < connections.length; i++) {
                                 const videoPeer = connections[i];
-                                if (this.clientPeer.localWebcamStream != null) {
-                                    videoPeer.addStream(this.clientPeer.localWebcamStream);
+                                if (this.clientPeer.localWebcamStream.stream != null) {
+                                    videoPeer.addStream(this.clientPeer.localWebcamStream.stream, 'webcam');
                                 }
-                                if (this.clientPeer.localScreenStream) {
-                                    videoPeer.addStream(this.clientPeer.localScreenStream, 'screen');
+                                if (this.clientPeer.localScreenStream.stream != null) {
+                                    videoPeer.addStream(this.clientPeer.localScreenStream.stream, 'screen');
                                 }
                             }
                         }
@@ -2061,19 +2066,31 @@
                         }
                     }
 
+
+                    class PeerStream {
+                        constructor() {
+                            this.stream = null;
+                            this.samePacketCount = 0;
+                            this.remotePacketsReceived = 0;
+                            this.statsInterval = null;
+                            this.monitoredTracks = [];
+                        }
+                    }
+
                     // a helper class for organizing peer data in video chats
                     class VideoPeer {
-                        constructor(peerToken, configuration, iceConnectedCallback, iceCandidateCallback, onNegotiationNeededCallback) {
+                        constructor(peerToken, peerConnectionData) {
 
                             this.isPolite = true;
 
                             this.token = peerToken;
-                            this.configuration = configuration;
-                            this.iceCandidateCallback = iceConnectedCallback;
-                            this.iceCandidateCallback = iceCandidateCallback;
 
                             this.remoteStream = null;
-                            this.localWebcamStream = null;
+
+                            this.remoteWebcamStream = new PeerStream();
+                            this.remoteScreenStream = new PeerStream();
+                            this.localWebcamStream = new PeerStream();
+                            this.localScreenStream = new PeerStream();
 
                             // these are for managing ended streams;
                             // apparently there's no way for a peer to
@@ -2081,84 +2098,17 @@
                             // streaming, other than to check the packet
                             // count of the incoming stream?
                             this.statsIntervalMs = 1000;
-                            this.statsInterval = null;
                             this.samePacketCountThreshold = 2;
-                            this.samePacketWebcamCount = 0;
-                            this.samePacketScreenCount = 0;
-                            this.remoteWebcamPacketsReceived = 0;
-                            this.remoteScreenPacketsReceived = 0;
 
                             this.isStable = false;
                             this.isMakingOffer = false;
                             this.ignoreOffer = false;
                             this.srdAnswerPending = false;
 
+                            this.peerConnections = new Map();
+                            this.createPeerConnection('webcam', peerConnectionData);
+                            this.createPeerConnection('screen', peerConnectionData);
 
-                            this.peerConnection = new RTCPeerConnection(configuration);
-                            this.peerConnection.ontrack = (event) => {
-                                console.log('track: ', event);
-                                if (this.remoteStream == null || this.remoteStream.id != event.streams[0].id) {
-                                    this.remoteStream = new MediaStream();
-                                }
-                                this.remoteStream.addTrack(event.track);
-
-                                const videoTrack = this.remoteStream.getVideoTracks()[0];
-                                if (videoTrack != null) {
-                                    this.statsInterval = setInterval(async () => {
-                                        const stats = await this.peerConnection.getStats(videoTrack);
-                                        const statsArray = [];
-                                        for (const [key, stat] of stats) {
-                                            if (stat.type == 'inbound-rtp' && stat.isRemote == false) {
-                                                if (stat.packetsReceived == this.remoteWebcamPacketsReceived) {
-                                                    if (this.samePacketWebcamCount == this.samePacketCountThreshold) {
-                                                        this.$video.pause();
-                                                        this.$video.src = null;
-                                                        this.remoteStream = null;
-                                                        clearInterval(this.statsInterval);
-                                                    }
-                                                    else {
-                                                        this.samePacketWebcamCount++;
-                                                    }
-                                                }
-                                                this.remoteWebcamPacketsReceived = stat.packetsReceived;
-                                            }
-                                        }
-                                    }, this.statsIntervalMs);
-                                }
-                                this.$video.srcObject = this.remoteStream;
-                            };
-                            this.peerConnection.onicecandidate = (event) => {
-                                if (event.candidate != null && iceCandidateCallback != null) {
-                                    iceCandidateCallback(this.token.PeerId, event);
-                                }
-                            };
-                            this.peerConnection.oniceconnectionstatechange = (event) => {
-                                console.log('ICE state change event: ', event);
-                                if (this.peerConnection.iceConnectionState == 'connected') {
-                                    if (iceConnectedCallback != null) {
-                                        iceConnectedCallback();
-                                    }
-                                }
-                                else if (this.peerConnection.iceConnectionState == 'failed') {
-                                    this.peerConnection.restartIce();
-                                }
-                            };
-                            this.peerConnection.onnegotiationneeded = async (event) => {
-                                try {
-                                    console.log('SLD due to negotiationneeded');
-                                    this.isMakingOffer = true;
-                                    await this.peerConnection.setLocalDescription();
-                                    if (onNegotiationNeededCallback != null) {
-                                        onNegotiationNeededCallback(this.token.PeerId, event, this.peerConnection.localDescription);
-                                    }
-                                }
-                                catch (error) {
-                                    console.error(error);
-                                }
-                                finally {
-                                    this.isMakingOffer = false;
-                                }
-                            };
 
                             this.$element = document.createElement('li');
                             this.$element.classList.add('video-stream');
@@ -2174,10 +2124,10 @@
                         // handlers
 
                         // functionality
-                        async addIceCandidate(candidate) {
-
+                        async addIceCandidate(streamType, candidate) {
+                            const peerConnection = this.peerConnections.get(streamType);
                             try {
-                                await this.peerConnection.addIceCandidate(candidate);
+                                await peerConnection.addIceCandidate(candidate);
                             } catch (error) {
                                 if (this.ignoreOffer == false) {
                                     console.error(`Failed to add ice candidate: ${error.toString()}`);
@@ -2185,8 +2135,9 @@
                             }
                         }
 
-                        async setDescription(description, sendValueMethod) {
-                            this.isStable = this.peerConnection.signalingState == 'stable' || (this.peerConnection.signalingState == 'have-local-offer' && this.srdAnswerPending);
+                        async setDescription(streamType, description, sendValueMethod) {
+                            const peerConnection = this.peerConnections.get(streamType);
+                            this.isStable = peerConnection.signalingState == 'stable' || (peerConnection.signalingState == 'have-local-offer' && this.srdAnswerPending);
                             this.ignoreOffer = description.type == 'offer' && (this.isPolite == false && (this.isMakingOffer == true || this.isStable == false));
                             if (this.ignoreOffer == true) {
                                 console.log('glare - ignoring offer');
@@ -2194,12 +2145,12 @@
                             }
                             this.srdAnswerPending = description.type == 'answer';
                             console.log(`SRD(${description.type})`);
-                            await this.peerConnection.setRemoteDescription(description);
+                            await peerConnection.setRemoteDescription(description);
                             if (description.type == 'offer') {
                                 console.log('SLD to get back to stable');
-                                await this.peerConnection.setLocalDescription();
+                                await peerConnection.setLocalDescription();
                                 if (sendValueMethod != null) {
-                                    sendValueMethod({ type: 'description', description: this.peerConnection.localDescription }, null, this.token.PeerId);
+                                    sendValueMethod({ streamType: streamType, type: 'description', description: peerConnection.localDescription }, null, this.token.PeerId);
                                 }
                             }
                             else {
@@ -2207,34 +2158,36 @@
                             }
                         }
 
-                        addStream(stream, type = 'webcam') {
-                            if (type == 'webcam') {
-                                this.localWebcamStream = stream;
+                        addStream(stream, streamType = 'webcam') {
+                            if (streamType == 'webcam') {
+                                this.localWebcamStream.stream = stream;
                             }
-                            else if (type == 'screen') {
-                                this.localScreenStream = stream;
+                            else if (streamType == 'screen') {
+                                this.localScreenStream.stream = stream;
                             }
+
+                            const peerConnection = this.peerConnections.get(streamType);
                             stream.getTracks().forEach(track => {
-                                this.peerConnection.addTrack(track, stream);
+                                peerConnection.addTrack(track, stream);
                             });
                         }
-                        removeStream(type = 'webcam') {
-                            const stream = (type == 'webcam') ? this.localWebcamStream : this.localScreenStream;
+                        removeStream(streamType = 'webcam') {
+                            const stream = (streamType == 'webcam') ? this.localWebcamStream.stream : this.localScreenStream.stream;
                             if (stream != null) {
                                 stream.getTracks().forEach(track => { track.stop(); });
                             }
                         }
 
-                        muteLocalAudio(type = 'webcam') {
-                            const stream = (type == 'webcam') ? this.localWebcamStream : this.localScreenStream;
+                        muteLocalAudio(streamType = 'webcam') {
+                            const stream = (streamType == 'webcam') ? this.localWebcamStream.stream : this.localScreenStream.stream;
                             if (stream != null) {
                                 stream.getAudioTracks().forEach(track => {
                                     track.enabled = false;
                                 });
                             }
                         }
-                        unmuteLocalAudio(type = 'webcam') {
-                            const stream = (type == 'webcam') ? this.localWebcamStream : this.localScreenStream;
+                        unmuteLocalAudio(streamType = 'webcam') {
+                            const stream = (streamType == 'webcam') ? this.localWebcamStream.stream : this.localScreenStream.stream;
                             if (stream != null) {
                                 stream.getAudioTracks().forEach(track => {
                                     track.enabled = true;
@@ -2242,11 +2195,52 @@
                             }
                         }
 
-                        setRemoteStream(type = 'webcam') {
-                            const stream = (type == 'webcam') ? this.remoteWebcamStream : this.remoteScreenStream;
-                        }
-                        clearRemoteStream(type = 'webcam') {
-                            const stream = (type == 'webcam') ? this.remoteWebcamStream : this.remoteScreenStream;
+                        addRemoteTrack(streamType, track) {
+                            const peerStream = (streamType == 'webcam') ? this.remoteWebcamStream : this.remoteScreenStream;
+
+                            // create a stream if it doesn't exist
+                            if (peerStream.stream == null) {
+                                peerStream.stream = new MediaStream();
+                            }
+                            // add the track to the stream
+                            peerStream.stream.addTrack(track);
+                            // set the peer's video tag to source from the stream;
+                            const $video = (streamType == 'webcam') ? this.$video : this.$screenshare;
+                            $video.srcObject = peerStream.stream;
+
+                            // add a listener to handle a dropped stream (that doesn't drop the connection)
+                            // not sure if there's another way to do this, but I wasn't seeing events fire
+                            // when streaming stopped by the connection stayed live. So this seems to work
+                            // in that scenario. /shrug
+                            const peerConnection = this.peerConnections.get(streamType);
+                            const videoTrack = peerStream.stream.getVideoTracks()[0];
+                            if (videoTrack != null) {
+                                // guard against overwriting the interval without
+                                // clearing it;
+                                if (peerStream.statsInterval == null) {
+                                    clearInterval(peerStream.statsInterval);
+                                }
+                                peerStream.statsInterval = setInterval(async () => {
+                                    const stats = await peerConnection.getStats(videoTrack);
+                                    for (const [key, stat] of stats) {
+                                        if (stat.type == 'inbound-rtp' && stat.isRemote == false) {
+
+                                            if (stat.packetsReceived == peerStream.remotePacketsReceived) {
+                                                if (peerStream.samePacketCount == this.samePacketCountThreshold) {
+                                                    this.$video.pause();
+                                                    this.$video.src = null;
+                                                    peerStream.stream = null;
+                                                    clearInterval(peerStream.statsInterval);
+                                                }
+                                                else {
+                                                    peerStream.samePacketCount++;
+                                                }
+                                            }
+                                            peerStream.remotePacketsReceived = stat.packetsReceived;
+                                        }
+                                    }
+                                }, this.statsIntervalMs);
+                            }
                         }
 
                         async closeConnection(peerConnection) {
@@ -2283,10 +2277,10 @@
                             await Promise.allSettled([this.endLocalStreams(), this.endRemoteStreams()]);
                         }
                         async endLocalStreams() {
-                            await Promise.allSettled([this.endStream(this.localWebcamStream), this.endScreenStream(this.localScreenStream)]);
+                            await Promise.allSettled([this.endStream(this.localWebcamStream.stream), this.endStream(this.localScreenStream.stream)]);
                         }
                         async endRemoteStreams() {
-                            await Promise.allSettled([this.endStream(this.remoteWebcamStream), this.endScreenStream(this.remoteScreenStream)]);
+                            await Promise.allSettled([this.endStream(this.remoteWebcamStream.stream), this.endStream(this.remoteScreenStream.stream)]);
                         }
                         async endStream(stream) {
                             try {
@@ -2301,6 +2295,53 @@
                                 console.error(new Error("Unable to stop stream track for peer:"));
                                 console.error(error);
                             }
+                        }
+
+                        createPeerConnection(streamType, peerConnectionData) {
+                            const { peerId, configuration, iceConnectedCallback, iceCandidateCallback, onNegotiationNeededCallback } = peerConnectionData;
+
+
+                            const peerConnection = new RTCPeerConnection(configuration);
+                            peerConnection.ontrack = (event) => {
+                                console.log('track: ', event);
+                                this.addRemoteTrack(streamType, event.track);
+                            };
+                            peerConnection.onicecandidate = (event) => {
+                                if (event.candidate != null && iceCandidateCallback != null) {
+                                    iceCandidateCallback(this.token.PeerId, event, streamType);
+                                }
+                            };
+                            peerConnection.oniceconnectionstatechange = (event) => {
+                                console.log('ICE state change event: ', event);
+                                const peerConnection = this.peerConnections.get(streamType);
+                                if (peerConnection.iceConnectionState == 'connected') {
+                                    if (iceConnectedCallback != null) {
+                                        iceConnectedCallback(this.token.peerId, event, streamType);
+                                    }
+                                }
+                                else if (peerConnection.iceConnectionState == 'failed') {
+                                    peerConnection.restartIce();
+                                }
+                            };
+                            peerConnection.onnegotiationneeded = async (event) => {
+                                try {
+                                    console.log('SLD due to negotiationneeded');
+                                    this.isMakingOffer = true;
+                                    const peerConnection = this.peerConnections.get(streamType);
+                                    await peerConnection.setLocalDescription();
+                                    if (onNegotiationNeededCallback != null) {
+                                        onNegotiationNeededCallback(this.token.PeerId, event, peerConnection.localDescription, streamType);
+                                    }
+                                }
+                                catch (error) {
+                                    console.error(error);
+                                }
+                                finally {
+                                    this.isMakingOffer = false;
+                                }
+                            };
+
+                            this.peerConnections.set(streamType, peerConnection);
                         }
                     }
                 </script>
