@@ -9,7 +9,7 @@
     }
   },
   "profiles": {
-    "IIS SimpleAPI_NetCore50_Swagger": {
+    "IIS SimpleAPI_NetCore50_OpenAPI": {
       "commandName": "Project",
       "dotnetRunMessages": "true",
       "launchBrowser": true,
@@ -19,7 +19,7 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
-    "SimpleAPI_NetCore50_Dev": {
+    "SimpleAPI_NetCore50_AppTester": {
       "commandName": "Project",
       "dotnetRunMessages": "true",
       "launchBrowser": true,

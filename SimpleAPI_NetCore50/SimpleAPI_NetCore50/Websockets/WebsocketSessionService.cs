@@ -336,6 +336,34 @@ namespace SimpleAPI_NetCore50.Websockets
                 }
             }
         }
+        public virtual async Task SendBinary(WebSocket socket, ArraySegment<byte> buffer)
+        {
+            if (socket.State != WebSocketState.Open)
+            {
+                return;
+            }
+
+            await socket.SendAsync(buffer, 
+                                   messageType: WebSocketMessageType.Binary,
+                                   endOfMessage: true,
+                                   cancellationToken: CancellationToken.None);
+        }
+        public virtual async Task SendBinaryToPeers(string sessionKey, WebSocket socket, ArraySegment<byte> buffer)
+        {
+            WebsocketSession session = this.GetSessionByKey(sessionKey);
+            if (session == null)
+            {
+                throw new Exception("Unknown Session requested: " + sessionKey);
+            }
+
+            foreach (var pair in session.GetPeers())
+            {
+                if (pair.Value.Socket != socket && pair.Value.Socket.State == WebSocketState.Open)
+                {
+                    await SendBinary(pair.Value.Socket, buffer);
+                }
+            }
+        }
 
         // access the raw bytes that were sent through the websocket;
         public virtual async Task ReceiveMessage(string sessionKey, WebsocketSessionPeer sessionPeer, WebSocketReceiveResult result, byte[] buffer)
@@ -367,6 +395,13 @@ namespace SimpleAPI_NetCore50.Websockets
                 WebsocketSessionError error = new WebsocketSessionError() { ErrorCode = "WP_002", Message = "An error occurred while processing the message" };
                 SendMessage(peer.Socket, error);
             }
+        }
+
+        public virtual async Task ReceiveBinary(string sessionKey, WebsocketSessionPeer sessionPeer, WebSocketReceiveResult result, byte[] buffer)
+        {
+            List<byte> byteList = new List<byte>(sessionPeer.IdAsByteArray);
+            byteList.AddRange(buffer);
+            SendBinaryToPeers(sessionKey, sessionPeer.Socket, byteList.ToArray());
         }
 
         public static WebsocketSessionMessageResponse CreateWebsocketResponseMessage(WebsocketSessionMessageType type, object data)
@@ -445,6 +480,7 @@ namespace SimpleAPI_NetCore50.Websockets
                     message = request.Message;
                     break;
                 case WebsocketSessionMessageType.StatusUpdates:
+                case WebsocketSessionMessageType.ByteArray:
                 case WebsocketSessionMessageType.Text:
                     message = request.Message;
                     break;

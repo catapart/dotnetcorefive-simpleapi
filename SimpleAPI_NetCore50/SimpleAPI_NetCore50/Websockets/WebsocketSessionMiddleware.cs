@@ -53,6 +53,11 @@ namespace SimpleAPI_NetCore50.Websockets
                     await ((WebsocketSessionService)SessionService).ReceiveMessage(sessionKey, peer, result, buffer);
                     return;
                 }
+                else if (result.MessageType == WebSocketMessageType.Binary)
+                {
+                    await SessionService.ReceiveBinary(sessionKey, peer, result, buffer);
+                    return;
+                }
                 else if (result.MessageType == WebSocketMessageType.Close)
                 {
 
