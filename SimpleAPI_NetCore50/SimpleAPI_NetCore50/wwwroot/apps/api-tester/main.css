@@ -1026,13 +1026,19 @@ main > .content .card.video-chat .display .stage
     flex-direction: column;
 }
 
-#priority-video-stream
+.stage #priority-video-stream
 {
     display: none;
 }
-.priority-selected #priority-video-stream
+.stage.priority-video-selected #priority-video-stream
 {
     display: block;
+}
+
+#priority-video-stream video
+{
+    max-width: 100%;
+    max-height: 100%;
 }
 
 #video-streams
@@ -1064,7 +1070,8 @@ main > .content .card.video-chat .display .stage
 }
 #video-streams .video-stream.webcam
 ,#video-streams .video-stream.screen
-,#video-streams .video-stream.both.priority-selected
+,#video-streams .video-stream.both.priority-webcam
+,#video-streams .video-stream.both.priority-screen
 {
     grid-template-columns: 1fr;
 }
@@ -1077,11 +1084,10 @@ main > .content .card.video-chat .display .stage
     grid-row-start: 1;
 }
 
-.video-stream.webcam .stream.screen {
-    display: none;
-}
-
-.video-stream.screen .stream.webcam {
+.video-stream.webcam .stream.screen
+,.video-stream.screen .stream.webcam
+,.video-stream.priority-webcam .stream.webcam
+,.video-stream.priority-screen .stream.screen {
     display: none;
 }
 
@@ -1129,10 +1135,6 @@ main > .content .card.video-chat .display .stage
     grid-row-start: 1;
 }
 
-#priority-video-stream video
-{
-}
-
 #video-streams .video-stream .set-priority
 {
     appearance: none;
@@ -1159,17 +1161,16 @@ main > .content .card.video-chat .display .stage
 }
 
 
-
-#video-streams .video-stream .description
+/*#video-streams .video-stream .description
 {
-    display: none; /* this will trigger the opacity animation on the initial insert */
-    z-index: 0;
+    display: none;*/ /* this will trigger the opacity animation on the initial insert */
+    /*z-index: 0;
     grid-column-start: 1;
     grid-row-start: 1;
     align-self: flex-end;
     transition-delay: 1s;
     opacity: 0;
-}
+}*/
 
 
 main > .content .card.video-chat .display .stage .overlay

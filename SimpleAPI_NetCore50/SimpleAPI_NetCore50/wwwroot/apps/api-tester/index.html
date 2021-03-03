@@ -10,6 +10,7 @@
     <meta property="og:url" content="" />
     <meta property="og:description" content="A simple tester app for the simple api functionality that cannot be tested with the OpenAPI visual schema" />
     <link rel="stylesheet" href="main.css">
+    <link rel="icon" type="image/png" href="assets/icons/icon.png">
     <title>API Tester</title>
     <script defer>
         const apiDomain = new URL(window.location).host;
@@ -1150,7 +1151,12 @@
                         </header>
                         <div class="display">
                             <div class="stage">
-                                <video id="priority-video-stream" autoplay="autoplay" src="https://storage.coverr.co/videos/qo301lESiwxA01mnfLIEwtfHAGnxWzirQ6?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBJZCI6Ijg3NjdFMzIzRjlGQzEzN0E4QTAyIiwiaWF0IjoxNjExMTc4NjAxfQ.epzkpzjkQX6Az6r9TBJfnx0YAImP4rmvFGe55Koo63w"></video>
+                                <div id="priority-video-stream">
+                                    <button class="clear" type="button" title="Minimize">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M12 2c5.514 0 10 4.486 10 10s-4.486 10-10 10-10-4.486-10-10 4.486-10 10-10zm0-2c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm6 16.538l-4.592-4.548 4.546-4.587-1.416-1.403-4.545 4.589-4.588-4.543-1.405 1.405 4.593 4.552-4.547 4.592 1.405 1.405 4.555-4.596 4.591 4.55 1.403-1.416z" /></svg>
+                                    </button>
+                                    <video autoplay="autoplay" src="https://storage.coverr.co/videos/qo301lESiwxA01mnfLIEwtfHAGnxWzirQ6?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBJZCI6Ijg3NjdFMzIzRjlGQzEzN0E4QTAyIiwiaWF0IjoxNjExMTc4NjAxfQ.epzkpzjkQX6Az6r9TBJfnx0YAImP4rmvFGe55Koo63w"></video>
+                                </div>
                                 <ul id="video-streams">
                                     <li class="video-stream">
                                         <video autoplay="autoplay" src="https://storage.coverr.co/videos/qo301lESiwxA01mnfLIEwtfHAGnxWzirQ6?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBJZCI6Ijg3NjdFMzIzRjlGQzEzN0E4QTAyIiwiaWF0IjoxNjExMTc4NjAxfQ.epzkpzjkQX6Az6r9TBJfnx0YAImP4rmvFGe55Koo63w"></video>
@@ -1298,6 +1304,12 @@
 
                         const $videoExitButton = $videoChatroom.querySelector('header > .exit');
 
+                        const $videoStage = $videoChatroom.querySelector('.display .stage');
+
+                        const $priorityVideoStream = document.getElementById('priority-video-stream');
+                        $priorityVideoStream.$video = $priorityVideoStream.querySelector('video');
+                        $priorityVideoStream.$clearButton = $priorityVideoStream.querySelector('.clear');
+
                         const $videoStreams = document.getElementById('video-streams');
 
                         const $videoPeers = document.getElementById('video-peers');
@@ -1343,6 +1355,8 @@
                         $videoChatMessageForm.addEventListener('submit', videoChatMessageForm_onSubmit);
                         $sessionKeyPill.addEventListener('click', sessionKeyPill_OnClick);
 
+                        $priorityVideoStream.$clearButton.addEventListener('click', priorityStream_clearButton_onClick);
+
                         $videoToggleAudio.addEventListener('click', videoToggleAudio_OnClick);
                         $videoToggleWebcam.addEventListener('click', videoToggleWebcam_OnClick);
                         $videoToggleScreen.addEventListener('click', videoToggleScreen_OnClick);
@@ -1362,11 +1376,11 @@
                                 for (let i = 0; i < peersAdded.length; i++) {
                                     let videoPeer = peersAdded[i];
 
-                                    videoPeer.$video.$setPriority.addEventListener(() => {
-                                        setPriorityVideo(videoPeer.$video);
+                                    videoPeer.$video.$setPriority.addEventListener('click', () => {
+                                        setPriorityVideo(videoPeer, 'webcam');
                                     });
-                                    videoPeer.$screenshare.$setPriority.addEventListener(() => {
-                                        setPriorityVideo(videoPeer.$screenshare);
+                                    videoPeer.$screenshare.$setPriority.addEventListener('click', () => {
+                                        setPriorityVideo(videoPeer, 'screen');
                                     });
 
                                     let peerToken = videoPeer.token;
@@ -1486,6 +1500,10 @@
                             addVideoChatStatus('Copied the Session Key');
                         }
 
+                        function priorityStream_clearButton_onClick(event) {
+                            clearPriorityVideo();
+                        }
+
                         function videoToggleAudio_OnClick(event) {
                             toggleMute();
                         }
@@ -1587,11 +1605,33 @@
                             }
                         }
 
-                        function setPriorityVideo($video) {
+                        function setPriorityVideo(videoPeer, streamType) {
+                            clearPriorityVideo();
 
+                            const $video = (streamType == 'webcam') ? videoPeer.$video : videoPeer.$screenshare;
+                            const priorityClassName = (streamType == 'webcam') ? 'priority-webcam' : 'priority-screen';
+                            $priorityVideoStream.$video.srcObject = $video.srcObject;
+                            videoPeer.$element.classList.add(priorityClassName);
+
+                            $videoStage.classList.add('priority-video-selected');
                         }
                         function clearPriorityVideo() {
+                            if ($priorityVideoStream.$video.srcObject != null) {
+                                for (const [key, videoPeer] of videoChat.signalingPeers) {
+                                    if (videoPeer.$video != null && videoPeer.$video.srcObject == $priorityVideoStream.$video.srcObject) {
+                                        videoPeer.$element.classList.remove('priority-webcam');
+                                        break;
+                                    }
+                                    else if (videoPeer.$screenshare != null && videoPeer.$screenshare.srcObject == $priorityVideoStream.$video.srcObject) {
+                                        videoPeer.$element.classList.remove('priority-screen');
+                                        break;
+                                    }
+                                }
 
+                                $priorityVideoStream.$video.pause();
+                                $priorityVideoStream.$video.srcObject = null;
+                            }
+                            $videoStage.classList.remove('priority-video-selected');
                         }
 
                         function clearVideoChatErrors() {
@@ -2209,23 +2249,23 @@
                         addStream(stream, streamType = 'webcam') {
                             if (streamType == 'webcam') {
                                 this.localWebcamStream.stream = stream;
-                                if (this.$element.classList.contains('screen')) {
-                                    this.$element.classList.remove('screen');
-                                    this.$element.classList.add('both');
-                                }
-                                else if (!this.$element.classList.contains('both')) {
-                                    this.$element.classList.add('webcam');
-                                }
+                                //if (this.$element.classList.contains('screen')) {
+                                //    this.$element.classList.remove('screen');
+                                //    this.$element.classList.add('both');
+                                //}
+                                //else if (!this.$element.classList.contains('both')) {
+                                //    this.$element.classList.add('webcam');
+                                //}
                             }
                             else if (streamType == 'screen') {
                                 this.localScreenStream.stream = stream;
-                                if (this.$element.classList.contains('webcam')) {
-                                    this.$element.classList.remove('webcam');
-                                    this.$element.classList.add('both');
-                                }
-                                else if (!this.$element.classList.contains('both')) {
-                                    this.$element.classList.add('screen');
-                                }
+                                //if (this.$element.classList.contains('webcam')) {
+                                //    this.$element.classList.remove('webcam');
+                                //    this.$element.classList.add('both');
+                                //}
+                                //else if (!this.$element.classList.contains('both')) {
+                                //    this.$element.classList.add('screen');
+                                //}
                             }
 
                             const peerConnection = this.peerConnections.get(streamType);
@@ -2240,24 +2280,24 @@
                                 stream.getTracks().forEach(track => { track.stop(); });
                             }
 
-                            if (streamType == 'webcam') {
-                                if (this.$element.classList.contains('both')) {
-                                    this.$element.classList.remove('both');
-                                    this.$element.classList.add('screen');
-                                }
-                                else if (!this.$element.classList.contains('webcam')) {
-                                    this.$element.classList.remove('webcam');
-                                }
-                            }
-                            else if (streamType == 'screen') {
-                                if (this.$element.classList.contains('both')) {
-                                    this.$element.classList.remove('both');
-                                    this.$element.classList.add('webcam');
-                                }
-                                else if (this.$element.classList.contains('screen')) {
-                                    this.$element.classList.remove('screen');
-                                }
-                            }
+                            //if (streamType == 'webcam') {
+                            //    if (this.$element.classList.contains('both')) {
+                            //        this.$element.classList.remove('both');
+                            //        this.$element.classList.add('screen');
+                            //    }
+                            //    else if (!this.$element.classList.contains('webcam')) {
+                            //        this.$element.classList.remove('webcam');
+                            //    }
+                            //}
+                            //else if (streamType == 'screen') {
+                            //    if (this.$element.classList.contains('both')) {
+                            //        this.$element.classList.remove('both');
+                            //        this.$element.classList.add('webcam');
+                            //    }
+                            //    else if (this.$element.classList.contains('screen')) {
+                            //        this.$element.classList.remove('screen');
+                            //    }
+                            //}
                         }
 
                         muteLocalAudio(streamType = 'webcam') {
