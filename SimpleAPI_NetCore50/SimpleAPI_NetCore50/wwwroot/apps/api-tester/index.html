@@ -1361,6 +1361,14 @@
                             if (peersAdded != null) {
                                 for (let i = 0; i < peersAdded.length; i++) {
                                     let videoPeer = peersAdded[i];
+
+                                    videoPeer.$video.$setPriority.addEventListener(() => {
+                                        setPriorityVideo(videoPeer.$video);
+                                    });
+                                    videoPeer.$screenshare.$setPriority.addEventListener(() => {
+                                        setPriorityVideo(videoPeer.$screenshare);
+                                    });
+
                                     let peerToken = videoPeer.token;
                                     if (videoChat.isHost == false) {
                                         let displayName = (peerToken.DisplayName == '') ? `[${peerToken.PeerId}]` : peerToken.DisplayName;
@@ -1376,7 +1384,7 @@
                                     let videoPeer = peersRemoved[i];
                                     let peerToken = videoPeer.token;
                                     let displayName = (peerToken.DisplayName == '') ? `[${peerToken.PeerId}]` : peerToken.DisplayName;
-                                    let action = (videoChat.isHost == true) ? 'ended' : 'left';
+                                    let action = (peerToken.PeerId == videoChat.hostPeer.PeerId) ? 'ended' : 'left';
                                     let content = `<div>${displayName} has ${action} the chat.</div>`;
                                     let $leaveMessage = addVideoChatStatus(content);
                                 }
@@ -1579,6 +1587,13 @@
                             }
                         }
 
+                        function setPriorityVideo($video) {
+
+                        }
+                        function clearPriorityVideo() {
+
+                        }
+
                         function clearVideoChatErrors() {
                             $videoHostErrorMessage.textContent = '';
                             $videoJoinErrorMessage.textContent = '';
@@ -1610,16 +1625,14 @@
                         function updateVideoChatPeers() {
                             clearVideoChatPeers();
 
-                            for (let property in videoChat.signalingPeers) {
-
-                                let peer = videoChat.signalingPeers[property];
-                                let displayName = (peer.token.DisplayName == '') ? `[${peer.token.PeerId}]` : peer.token.DisplayName;
+                            for (const [peerId, videoPeer] of videoChat.signalingPeers) {
+                                let displayName = (videoPeer.token.DisplayName == '') ? `[${videoPeer.token.PeerId}]` : videoPeer.token.DisplayName;
                                 let $peer = document.createElement('li');
                                 $peer.classList.add('peer');
-                                if (peer.token.PeerId == videoChat.hostPeer.token.PeerId) {
+                                if (videoPeer.token.PeerId == videoChat.hostPeer.token.PeerId) {
                                     $peer.classList.add('host');
                                 }
-                                if (peer.token.PeerId == videoChat.clientPeer.token.PeerId) {
+                                if (videoPeer.token.PeerId == videoChat.clientPeer.token.PeerId) {
                                     $peer.classList.add('self');
                                 }
                                 $peer.textContent = displayName;
@@ -1887,6 +1900,15 @@
                             this.clientPeer.localWebcamStream.stream = stream;
                             this.isStreamingWebcam = true;
 
+                            // update element display
+                            if (this.clientPeer.$element.classList.contains('screen')) {
+                                this.clientPeer.$element.classList.remove('screen');
+                                this.clientPeer.$element.classList.add('both');
+                            }
+                            else if (!this.clientPeer.$element.classList.contains('both')) {
+                                this.clientPeer.$element.classList.add('webcam');
+                            }
+
                             for (let [peerId, videoPeer] of this.signalingPeers.entries()) {
                                 if (videoPeer != this.clientPeer) {
                                     videoPeer.addStream(stream, 'webcam');
@@ -1903,6 +1925,15 @@
                                 }
                             }
 
+                            // update element display
+                            if (this.clientPeer.$element.classList.contains('both')) {
+                                this.clientPeer.$element.classList.remove('both');
+                                this.clientPeer.$element.classList.add('screen');
+                            }
+                            else if (!this.$element.classList.contains('webcam')) {
+                                this.clientPeer.$element.classList.remove('webcam');
+                            }
+
                             this.clientPeer.removeStream('webcam');
                             this.clientPeer.localWebcamStream.stream = null;
                             this.isStreamingWebcam = false;
@@ -1912,6 +1943,15 @@
                             this.clientPeer.$screenshare.srcObject = stream;
                             this.clientPeer.localScreenStream.stream = stream;
                             this.isStreamingScreen = true;
+
+                            // update element display
+                            if (this.clientPeer.$element.classList.contains('webcam')) {
+                                this.clientPeer.$element.classList.remove('webcam');
+                                this.clientPeer.$element.classList.add('both');
+                            }
+                            else if (!this.clientPeer.$element.classList.contains('both')) {
+                                this.clientPeer.$element.classList.add('screen');
+                            }
 
                             // handle the case that the user clicked
                             // the browser's "stop sharing" button
@@ -1930,6 +1970,14 @@
                             this.clientPeer.$screenshare.style.display = 'none';
                             this.clientPeer.removeStream('screen');
                             this.clientPeer.localScreenStream.stream = null;
+
+                            if (this.clientPeer.$element.classList.contains('both')) {
+                                this.clientPeer.$element.classList.remove('both');
+                                this.clientPeer.$element.classList.add('webcam');
+                            }
+                            else if (this.clientPeer.$element.classList.contains('screen')) {
+                                this.clientPeer.$element.classList.remove('screen');
+                            }
 
                             for (let [peerId, videoPeer] of this.signalingPeers.entries()) {
                                 if (videoPeer != this.clientPeer) {
@@ -2112,18 +2160,18 @@
 
                             this.$element = document.createElement('li');
                             this.$element.classList.add('video-stream');
-                            this.$element.innerHTML = `<video class="webcam" autoplay></video><video class="screen" autoplay></video><button class="set-priority" type="button" title="Expand" data-peer-name="${peerToken.DisplayName}"></button>`
-                            this.$video = this.$element.querySelector('video.webcam');
+                            this.$element.innerHTML = `<div class="stream webcam"><video autoplay></video><button class="set-priority" type="button" title="Expand" data-stream-description="${this.token.DisplayName}"></button></div>
+                            <div class="stream screen"><video autoplay></video><button class="set-priority" type="button" title="Expand" data-stream-description="${this.token.DisplayName}'s Screen"></button></div>`;
+                            this.$video = this.$element.querySelector('.strea,.webcam > video');
                             this.$setPriority = this.$element.querySelector('button');
-                            this.$screenshare = this.$element.querySelector('video.screen');
+                            this.$screenshare = this.$element.querySelector('.stream.screen > video');
+                            this.$video.$setPriority = this.$element.querySelector('.stream.webcam .set-priority');
+                            this.$screenshare.$setPriority = this.$element.querySelector('.stream.screen .set-priority');
 
                             this.$element.objectRef = this;
 
                         }
 
-                        // handlers
-
-                        // functionality
                         async addIceCandidate(streamType, candidate) {
                             const peerConnection = this.peerConnections.get(streamType);
                             try {
@@ -2161,20 +2209,54 @@
                         addStream(stream, streamType = 'webcam') {
                             if (streamType == 'webcam') {
                                 this.localWebcamStream.stream = stream;
+                                if (this.$element.classList.contains('screen')) {
+                                    this.$element.classList.remove('screen');
+                                    this.$element.classList.add('both');
+                                }
+                                else if (!this.$element.classList.contains('both')) {
+                                    this.$element.classList.add('webcam');
+                                }
                             }
                             else if (streamType == 'screen') {
                                 this.localScreenStream.stream = stream;
+                                if (this.$element.classList.contains('webcam')) {
+                                    this.$element.classList.remove('webcam');
+                                    this.$element.classList.add('both');
+                                }
+                                else if (!this.$element.classList.contains('both')) {
+                                    this.$element.classList.add('screen');
+                                }
                             }
 
                             const peerConnection = this.peerConnections.get(streamType);
                             stream.getTracks().forEach(track => {
                                 peerConnection.addTrack(track, stream);
                             });
+
                         }
                         removeStream(streamType = 'webcam') {
                             const stream = (streamType == 'webcam') ? this.localWebcamStream.stream : this.localScreenStream.stream;
                             if (stream != null) {
                                 stream.getTracks().forEach(track => { track.stop(); });
+                            }
+
+                            if (streamType == 'webcam') {
+                                if (this.$element.classList.contains('both')) {
+                                    this.$element.classList.remove('both');
+                                    this.$element.classList.add('screen');
+                                }
+                                else if (!this.$element.classList.contains('webcam')) {
+                                    this.$element.classList.remove('webcam');
+                                }
+                            }
+                            else if (streamType == 'screen') {
+                                if (this.$element.classList.contains('both')) {
+                                    this.$element.classList.remove('both');
+                                    this.$element.classList.add('webcam');
+                                }
+                                else if (this.$element.classList.contains('screen')) {
+                                    this.$element.classList.remove('screen');
+                                }
                             }
                         }
 
@@ -2208,6 +2290,26 @@
                             const $video = (streamType == 'webcam') ? this.$video : this.$screenshare;
                             $video.srcObject = peerStream.stream;
 
+                            // update element display
+                            if (streamType == 'webcam') {
+                                if (this.$element.classList.contains('screen')) {
+                                    this.$element.classList.remove('screen');
+                                    this.$element.classList.add('both');
+                                }
+                                else if (!this.$element.classList.contains('both')) {
+                                    this.$element.classList.add('webcam');
+                                }
+                            }
+                            else if (streamType == 'screen') {
+                                if (this.$element.classList.contains('webcam')) {
+                                    this.$element.classList.remove('webcam');
+                                    this.$element.classList.add('both');
+                                }
+                                else if (!this.$element.classList.contains('both')) {
+                                    this.$element.classList.add('screen');
+                                }
+                            }
+
                             // add a listener to handle a dropped stream (that doesn't drop the connection)
                             // not sure if there's another way to do this, but I wasn't seeing events fire
                             // when streaming stopped by the connection stayed live. So this seems to work
@@ -2227,10 +2329,30 @@
 
                                             if (stat.packetsReceived == peerStream.remotePacketsReceived) {
                                                 if (peerStream.samePacketCount == this.samePacketCountThreshold) {
+                                                    clearInterval(peerStream.statsInterval);
                                                     this.$video.pause();
                                                     this.$video.src = null;
                                                     peerStream.stream = null;
-                                                    clearInterval(peerStream.statsInterval);
+
+
+                                                    if (streamType == 'webcam') {
+                                                        if (this.$element.classList.contains('both')) {
+                                                            this.$element.classList.remove('both');
+                                                            this.$element.classList.add('screen');
+                                                        }
+                                                        else if (!this.$element.classList.contains('webcam')) {
+                                                            this.$element.classList.remove('webcam');
+                                                        }
+                                                    }
+                                                    else if (streamType == 'screen') {
+                                                        if (this.$element.classList.contains('both')) {
+                                                            this.$element.classList.remove('both');
+                                                            this.$element.classList.add('webcam');
+                                                        }
+                                                        else if (this.$element.classList.contains('screen')) {
+                                                            this.$element.classList.remove('screen');
+                                                        }
+                                                    }
                                                 }
                                                 else {
                                                     peerStream.samePacketCount++;

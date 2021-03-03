@@ -1049,27 +1049,88 @@ main > .content .card.video-chat .display .stage
 
 #video-streams .video-stream
 {
-    /*width="544" height="306"*/
-    flex: 1;
     display: grid;
+    gap: .2em;
     grid-template-columns: 1fr;
     grid-template-rows: 1fr;
-    justify-items: center;
     margin-right: 1em;
     margin-bottom: 1em;
     max-width: 544px;
+    cursor: pointer;
+}
+#video-streams .video-stream.both
+{
+    grid-template-columns: 1fr 1fr;
+}
+#video-streams .video-stream.webcam
+,#video-streams .video-stream.screen
+,#video-streams .video-stream.both.priority-selected
+{
+    grid-template-columns: 1fr;
 }
 
-#priority-video-stream video
-,#video-streams .video-stream video
+.video-stream .stream
 {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-column-start: 1;
+    grid-row-start: 1;
+}
+
+.video-stream.webcam .stream.screen {
+    display: none;
+}
+
+.video-stream.screen .stream.webcam {
+    display: none;
+}
+
+.video-stream.both .stream.screen {
+    grid-column-start: 2;
+}
+
+#video-streams .video-stream .stream > button:before
+{
+    content:attr(data-stream-description);
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    border-radius: 30px;
+    background-color: rgba(0,0,0,.3);
+    padding: .1em 1em;
+    font-size: .7em;
+    margin-bottom: .5em;
+    transform: translate(-50%);
+    opacity: 0;
+    transition: opacity 0.2s 1s linear;
+    display: inline-block;
+}
+#video-streams .video-stream .stream > button:hover:before
+{
+    transition: opacity 0.2s .001s linear;
+    opacity: 1;
+}
+
+.video-stream .stream > video
+{
+    grid-column-start: 1;
+    grid-row-start: 1;
     /*width="544" height="306"*/
     min-width: 100px;
     max-width: 100%;
-    max-height: 100%;
     z-index: 0;
     grid-column-start: 1;
     grid-row-start: 1;
+}
+
+.video-stream .stream > button
+{
+    grid-column-start: 1;
+    grid-row-start: 1;
+}
+
+#priority-video-stream video
+{
 }
 
 #video-streams .video-stream .set-priority
@@ -1095,28 +1156,6 @@ main > .content .card.video-chat .display .stage
 ,#video-streams .video-stream .set-priority:active
 {
     outline-color: #ab3f84;
-}
-
-#video-streams .video-stream .set-priority:before
-{
-    content:attr(data-peer-name);
-    position: absolute;
-    bottom: 0;
-    left: 50%;
-    border-radius: 30px;
-    background-color: rgba(0,0,0,.3);
-    padding: .1em 1em;
-    font-size: .7em;
-    margin-bottom: .5em;
-    transform: translate(-50%);
-    opacity: 0;
-    transition: opacity 0.2s 1s linear;
-    display: inline-block;
-}
-#video-streams .video-stream .set-priority:hover:before
-{
-    transition: opacity 0.2s .001s linear;
-    opacity: 1;
 }
 
 
