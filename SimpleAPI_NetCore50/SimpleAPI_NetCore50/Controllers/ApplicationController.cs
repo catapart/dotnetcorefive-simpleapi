@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using SimpleAPI_NetCore50.Data;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Authorization;
 
 namespace SimpleAPI_NetCore50.Controllers
 {
@@ -24,6 +25,14 @@ namespace SimpleAPI_NetCore50.Controllers
         public async Task<ActionResult> Version()
         {
             string appVersion = Assembly.GetEntryAssembly().GetName().Version.ToString();
+            return await Task.FromResult(Ok(appVersion));
+        }
+        // GET: api/Application
+        [HttpGet("secure-data")]
+        [Authorize]
+        public async Task<ActionResult> SecureData()
+        {
+            string appVersion = "You should only see this if you provided an authorized token.";
             return await Task.FromResult(Ok(appVersion));
         }
     }

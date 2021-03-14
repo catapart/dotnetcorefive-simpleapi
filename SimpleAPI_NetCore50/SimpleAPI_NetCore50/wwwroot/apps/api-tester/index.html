@@ -411,7 +411,7 @@
                     <h2 class="version"></h2>
                 </div>
                 <h3>This page is for testing non-REST functionality, including file streaming, websocket, and WebRTC sessions.</h3>
-                <h3>For testing any standard REST endpoints, please use the OpenAPI route (this can be set as the default in launchsettings.json)</h3>
+                <h3>For testing any standard REST endpoints, please use the <a href="../../swagger/index.html">OpenAPI route</a> (this can be set as the default in launchsettings.json)</h3>
                 <p><small><em>Icons provided by <a href="https://iconmonstr.com/" title="Link to Icon Monster">iconmonstr</a></em></small></p>
             </div>
         </header>
@@ -827,8 +827,8 @@
                             let $message = document.createElement('li');
                             $message.classList.add('session-key');
                             $message.innerHTML = `<span class="description">Session Key:</span>
-                                                            <input class="value" type="text" />
-                                                            <button class="copy" type="button" title="Copy Session Key">Copy</button>`;
+                                                                            <input class="value" type="text" />
+                                                                            <button class="copy" type="button" title="Copy Session Key">Copy</button>`;
 
                             const $value = $message.querySelector('.value');
                             $value.value = sessionKey;
@@ -874,26 +874,26 @@
                                 let userContent = '';
                                 if (peer != chatSession.token) {
                                     userContent = `<span class="user">
-                                                                                                                                                                                <span class="image-container">
-                                                                                                                                                                                    ${peer.IconUrl || `<svg class="icon user" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M12 2c2.757 0 5 2.243 5 5.001 0 2.756-2.243 5-5 5s-5-2.244-5-5c0-2.758 2.243-5.001 5-5.001zm0-2c-3.866 0-7 3.134-7 7.001 0 3.865 3.134 7 7 7s7-3.135 7-7c0-3.867-3.134-7.001-7-7.001zm6.369 13.353c-.497.498-1.057.931-1.658 1.302 2.872 1.874 4.378 5.083 4.972 7.346h-19.387c.572-2.29 2.058-5.503 4.973-7.358-.603-.374-1.162-.811-1.658-1.312-4.258 3.072-5.611 8.506-5.611 10.669h24c0-2.142-1.44-7.557-5.631-10.647z" /></svg>`}
-                                                                                                                                                                                </span>
-                                                                                                                                                                                <span class="name">${peer.DisplayName || 'Unknown Guest'}</span>
-                                                                                                                                                                            </span>
-                                                                                                                                                                            `;
+                                                                                                                                                                                                <span class="image-container">
+                                                                                                                                                                                                    ${peer.IconUrl || `<svg class="icon user" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M12 2c2.757 0 5 2.243 5 5.001 0 2.756-2.243 5-5 5s-5-2.244-5-5c0-2.758 2.243-5.001 5-5.001zm0-2c-3.866 0-7 3.134-7 7.001 0 3.865 3.134 7 7 7s7-3.135 7-7c0-3.867-3.134-7.001-7-7.001zm6.369 13.353c-.497.498-1.057.931-1.658 1.302 2.872 1.874 4.378 5.083 4.972 7.346h-19.387c.572-2.29 2.058-5.503 4.973-7.358-.603-.374-1.162-.811-1.658-1.312-4.258 3.072-5.611 8.506-5.611 10.669h24c0-2.142-1.44-7.557-5.631-10.647z" /></svg>`}
+                                                                                                                                                                                                </span>
+                                                                                                                                                                                                <span class="name">${peer.DisplayName || 'Unknown Guest'}</span>
+                                                                                                                                                                                            </span>
+                                                                                                                                                                                            `;
                                 }
                                 else {
                                     $message.classList.add('self');
                                 }
 
                                 content = `${userContent}<div class="body">
-                                                                                                                                                                        <div class="content">
-                                                                                                                                                                            ${messageData.Message}
-                                                                                                                                                                        </div>
-                                                                                                                                                                        <footer>
-                                                                                                                                                                            <span class="date">${date}</span>
-                                                                                                                                                                            <span class="time">${time}</span>
-                                                                                                                                                                        </footer>
-                                                                                                                                                                    </div>`;
+                                                                                                                                                                                        <div class="content">
+                                                                                                                                                                                            ${messageData.Message}
+                                                                                                                                                                                        </div>
+                                                                                                                                                                                        <footer>
+                                                                                                                                                                                            <span class="date">${date}</span>
+                                                                                                                                                                                            <span class="time">${time}</span>
+                                                                                                                                                                                        </footer>
+                                                                                                                                                                                    </div>`;
                             }
 
                             $message.innerHTML = content;
@@ -1720,9 +1720,9 @@
                                 }
 
                                 content = `<header><span class="name">${peer.DisplayName}</span></header>
-                                                                                            <div class="content">
-                                                                                                ${messageData.Message}
-                                                                                            </div>`;
+                                                                                                            <div class="content">
+                                                                                                                ${messageData.Message}
+                                                                                                            </div>`;
                             }
 
                             $message.innerHTML = content;
@@ -2201,7 +2201,7 @@
                             this.$element = document.createElement('li');
                             this.$element.classList.add('video-stream');
                             this.$element.innerHTML = `<div class="stream webcam"><video autoplay></video><button class="set-priority" type="button" title="Expand" data-stream-description="${this.token.DisplayName}"></button></div>
-                            <div class="stream screen"><video autoplay></video><button class="set-priority" type="button" title="Expand" data-stream-description="${this.token.DisplayName}'s Screen"></button></div>`;
+                                            <div class="stream screen"><video autoplay></video><button class="set-priority" type="button" title="Expand" data-stream-description="${this.token.DisplayName}'s Screen"></button></div>`;
                             this.$video = this.$element.querySelector('.strea,.webcam > video');
                             this.$setPriority = this.$element.querySelector('button');
                             this.$screenshare = this.$element.querySelector('.stream.screen > video');
@@ -2504,6 +2504,171 @@
                             };
 
                             this.peerConnections.set(streamType, peerConnection);
+                        }
+                    }
+                </script>
+            </div>
+
+
+            <div class="card authorization">
+                <header>
+                    <h4>Authorization</h4>
+                </header>
+                <div class="content">
+                    <div class="display">
+                        <svg class="icon lock" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M18 10v-4c0-3.313-2.687-6-6-6s-6 2.687-6 6v4h-3v14h18v-14h-3zm-5 7.723v2.277h-2v-2.277c-.595-.347-1-.984-1-1.723 0-1.104.896-2 2-2s2 .896 2 2c0 .738-.404 1.376-1 1.723zm-5-7.723v-4c0-2.206 1.794-4 4-4 2.205 0 4 1.794 4 4v4h-8z"/></svg>
+                        <span class="title">Authorization</span>
+                        <span class="description">Get data from a route that requries a bearer token to retrive.<br />This test will require an account. You can register a new account using the <a href="../../swagger/index.html">OpenAPI live documentation</a>.</span>
+                    </div>
+                    <form id="login-form" method="post">
+                        <div class="content">
+                            <label class="field-group text">
+                                <span class="label">Email</span>
+                                <span class="content">
+                                    <input id="login-email-input" class="value" type="email" />
+                                </span>
+                            </label>
+                            <label class="field-group text">
+                                <span class="label">Password</span>
+                                <span class="content">
+                                    <input id="login-password-input" class="value" type="password" />
+                                </span>
+                            </label>
+                            <button id="login" type="submit">Login</button>
+                            <span class="message">This is an error</span>
+                        </div>
+                    </form>
+                    <span class="divider"></span>
+                    <form id="secure-data-form" method="post">
+                        <span class="message">This is an error</span>
+                        <button id="get-secure-data" type="submit">Get Secure Data</button>
+                    </form>
+                </div>
+                <script defer type="module">
+                    document.addEventListener('DOMContentLoaded', Init);
+
+                    async function Init() {
+                        // a well defined variable for storing this example
+                        // user token. In practice, you could keep it in
+                        // localstorage or indexedDB or a cookie.
+                        let userToken = null;
+
+                        // define well-known html elements
+                        const $loginForm = document.getElementById('login-form');
+                        const $loginEmailInput = document.getElementById('login-email-input');
+                        const $loginPasswordInput = document.getElementById('login-password-input');
+                        const $loginMessage = $loginForm.querySelector('.message');
+                        const $secureDataForm = document.getElementById('secure-data-form');
+                        const $secureDataMessage = $secureDataForm.querySelector('.message');
+
+                        // add functionality
+                        $loginForm.addEventListener('submit', loginForm_onSubmit);
+                        $secureDataForm.addEventListener('submit', secureDataForm_onSubmit);
+
+                        // prepare page
+                        resetLoginForm();
+                        resetSecureDataForm();
+
+                        // handlers
+                        async function loginForm_onSubmit(event) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            try {
+                                resetLoginForm();
+
+                                setLoginMessage('Requesting...');
+                                let options =
+                                {
+                                    method: "POST",
+                                    headers:
+                                    {
+                                        "Content-Type": "application/json"
+                                    },
+                                    body: JSON.stringify({ Email: `${$loginEmailInput.value}`, Password: `${$loginPasswordInput.value}` })
+                                };
+                                const response = await fetch(`https://${apiDomain}/api/Account/login`, options);
+                                if (response.ok == true) {
+                                    const parsedResponse = await response.json();
+                                    console.log(parsedResponse);
+                                    userToken = parsedResponse.token;
+                                    setLoginMessage("Logged in successfully! Try accessing the secure data below.");
+                                }
+                                else if (response.status == 401) {
+                                    setLoginMessage("Login failed. Please verify the email and password.", true);
+                                }
+                                else {
+                                    console.log(response);
+                                    throw new Error("Server Error");
+                                }
+                            }
+                            catch (exception) {
+                                console.error(exception);
+                                setLoginMessage("An error occured, while logging in. See the console log for more details.", true);
+                            }
+                            finally {
+                                return false;
+                            }
+
+                        }
+                        async function secureDataForm_onSubmit(event) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            try {
+                                resetSecureDataForm();
+
+                                setSecureDataMessage('Requesting...');
+
+                                const options = {
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                        "Authorization": 'Bearer ' + userToken
+                                    }
+                                };
+                                const response = await fetch(`https://${apiDomain}/api/app/secure-data`, options);
+                                if (response.ok == true) {
+                                    const secureData = await response.text();
+                                    setSecureDataMessage("Secured Data: " + secureData);
+                                }
+                                else if (response.status == 401) {
+                                    setSecureDataMessage("You are not authorized to view the secure data. Please log in above.", true);
+                                }
+                                else {
+                                    console.log(response);
+                                    throw new Error("Unknown server error");
+                                }
+                            }
+                            catch (exception) {
+                                console.error(exception);
+                                setSecureDataMessage("An error occured, while requesting the data. See the console log for more details.");
+                            }
+                            finally {
+                                return false;
+                            }
+
+                        }
+
+                        // functionality
+                        function resetLoginForm() {
+                            $loginMessage.textContent = "";
+                            $loginMessage.title = "";
+                            $loginMessage.classList.remove('error');
+                        }
+                        function setLoginMessage(message, isError) {
+                            $loginMessage.textContent = message;
+                            if (isError == true) {
+                                $loginMessage.classList.add('error');
+                            }
+                        }
+                        function resetSecureDataForm() {
+                            $secureDataMessage.textContent = "";
+                            $secureDataMessage.title = "";
+                            $secureDataMessage.classList.remove('error');
+                        }
+                        function setSecureDataMessage(message, isError) {
+                            $secureDataMessage.textContent = message;
+                            if (isError == true) {
+                                $secureDataMessage.classList.add('error');
+                            }
                         }
                     }
                 </script>

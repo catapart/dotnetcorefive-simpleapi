@@ -182,8 +182,8 @@ namespace SimpleAPI_NetCore50
 
             app.UseCors();
 
-            app.UseAuthorization();
             app.UseAuthentication();
+            app.UseAuthorization();
 
             app.UseEndpoints(endpoints =>
             {

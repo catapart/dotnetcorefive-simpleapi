@@ -1421,3 +1421,117 @@ main > .content .card.video-chat .display > aside .panels .panel.messages > .con
 {
     fill:rgba(255,255,255,.4);
 }
+
+
+main > .content .card.authorization
+{
+    --theme-gradient: linear-gradient(328deg, #ffbb31 0%, #ffe29b 100%);
+    --theme-gradient-active: linear-gradient(328deg, #ffe29b 0%, #ffbb31 100%);
+}
+
+.card.authorization > .content > .display
+{
+    background: var(--theme-gradient);
+    color: #fff;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding: .5em;
+    margin: .5em;
+    margin-bottom:0;
+}
+
+.card.authorization > .content > .display svg
+{
+    width: 64px;
+    height: 64px;
+    margin-bottom: .25em;
+}
+
+.card.authorization > .content > .display svg path
+{
+    fill: #5a3910;
+}
+
+.card.authorization > .content > .display .title
+{
+    font-family: Vegur, 'Open Sans', sans-serif;
+    color: #5a3910;
+}
+
+.card.authorization > .content > .display .description
+{
+    font-size: .8em;
+    text-align:center;
+    color: #5a3910;
+}
+
+#login-form
+,#secure-data-form
+{
+    background-color:#fff;
+    color:#232323;
+    display:grid;
+    grid-template-columns: 1fr;
+    margin: .5em;
+    margin-top:0;
+    padding: 1em;
+}
+
+.card.authorization form .field-group .content
+{
+    display: flex;
+}
+
+.card.authorization form .label
+{
+    font-size: .7em;
+    display: block;
+    font-family: Vegur, 'Open Sans', sans-serif;
+}
+
+.card.authorization form input
+{
+    background-color: #fff;
+    color:#232323;
+    flex: 1;
+}
+
+.card.authorization form button
+{
+    background: var(--theme-gradient);
+    color: #fff;
+    border: none;
+    border-radius: 0;
+    padding: .1em .5em;
+    margin-right: .25em;
+    cursor: pointer;
+    color: #5a3910;
+    border: solid 1px #c79659;
+}
+
+#login-form .content
+{
+    display: flex;
+    flex-direction: column;
+}
+
+#login-form button
+{
+    margin: .5em 0 1em 0;
+    flex: 1;
+}
+
+#login-form > .message
+,#secure-data-form > .message
+{
+    margin: 1em;
+    margin-top:0;
+    text-align:center;
+}
+#login-form  .message.error
+,#secure-data-form  .message.error
+{
+    color: red;
+}

@@ -13,7 +13,7 @@ using Microsoft.Extensions.Logging;
 
 namespace SimpleAPI_NetCore50.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/account")]
     [ApiController]
     public class AccountController : Controller
     {
