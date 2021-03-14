@@ -2,6 +2,8 @@
 A simple API built using .NET core 5.0, that uses the entity framework to store and retrieve data items, and websockets for two-way sessions.
 
 ## QuickStart / Development Setup
+1. Install Visual Studio 2019 with the "ASP&#46;NET and web development" workload.
+![Install Visual Studio screenshot](./documentation-assets/visual-studio-install.png)
 1. Clone the repo.
 1. Generate a user secrets file by right-clicking on the project in Visual Studio and selecting "Manage User Secrets".  
 ![Manage User Secrets screenshot](./documentation-assets/manage-user-secrets.png)
