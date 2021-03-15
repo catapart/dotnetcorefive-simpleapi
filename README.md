@@ -13,10 +13,12 @@ A simple API built using .NET core 5.0, that uses the entity framework to store 
         "ConnectionStrings":
         {
             "development": "Data Source=[dev server name];Initial Catalog=[development db name];[authentication method/credentials]",
-            "example": "Data Source=EXAMPLE;Initial Catalog=ExampleDB;User Id=apiUser;Password=supersecretpassphrase;"
+            "example": "Data Source=EXAMPLE;Initial Catalog=ExampleDB;User Id=apiUser;Password=supersecretpassphrase;",
+            "integratedExample": "Data Source=EXAMPLE;Initial Catalog=ExampleDB;Integrated Security=true;"
         }
     }
     ```
+    _[Note]: You can find more examples of connection strings [here](https://www.connectionstrings.com/sql-server/)._
 1. Run the project.
 1. Navigate to `~/swagger/index.html` for the OpenAPI documentation or `~/apps/api-tester/index.html` in order to test functionality that requires state, like video chat, secure data, or file uploads.
 
